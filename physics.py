@@ -26,8 +26,8 @@ class vector3:
             z = self.z * vector
 
         return vector3(x, y, z)
-
-    def __div__(self, vector):
+    
+    def __truediv__(self, vector):
         
         if isinstance(vector, vector3):
 
@@ -58,6 +58,19 @@ class vector3:
         z = self.z - vector.z
         
         return vector3(x, y, z)
+
+    def __eq__(self, vector):
+        
+        if isinstance(vector, vector3):
+            
+            if self.x == vector.x and self.y == vector.y and self.z == vector.z:
+                return True
+
+            else: 
+                return False
+
+        else:
+            return False
 
     def norm(self):
 
