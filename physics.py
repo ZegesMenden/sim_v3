@@ -1,4 +1,6 @@
 import numpy as np
+import math
+from math import isclose
 
 DEG_TO_RAD = np.pi / 180
 RAD_TO_DEG = 180 / np.pi
@@ -63,7 +65,7 @@ class vector3:
         
         if isinstance(vector, vector3):
             
-            if self.x == vector.x and self.y == vector.y and self.z == vector.z:
+            if isclose(self.x, vector.x, rel_tol=0.01) and isclose(self.y, vector.y, rel_tol=0.01) and isclose(self.z, vector.z, rel_tol=0.01):
                 return True
 
             else: 
@@ -104,7 +106,7 @@ class vector3:
     
 class Quaternion:
     
-    def __init__(self, w, x, y, z):
+    def __init__(self, w=1.0, x=0.0, y=0.0, z=0.0):
 
         self.w = w
         self.x = x
@@ -120,14 +122,25 @@ class Quaternion:
         
         return self
 
+    def __sub__(self, quaternion):
+
+        self.w -= quaternion.w
+        self.x -= quaternion.x
+        self.y -= quaternion.y
+        self.z -= quaternion.z
+        
+        return self
+
     def __mul__(self, quaternion):
         
         qNew = Quaternion(1.0, 0.0, 0.0, 0.0)
 
         qNew.w = ( self.w * quaternion.w ) - ( self.x * quaternion.x ) - ( self.y * quaternion.y ) - ( self.z * quaternion.z ) # im no betting man but if i were 
-        qNew.x = ( self.w * quaternion.x ) - ( self.x * quaternion.w ) - ( self.y * quaternion.z ) - ( self.z * quaternion.y ) # i would bet that at least one 
-        qNew.y = ( self.w * quaternion.y ) - ( self.x * quaternion.z ) - ( self.y * quaternion.w ) - ( self.z * quaternion.x ) # of the operations in this function
-        qNew.z = ( self.w * quaternion.z ) - ( self.x * quaternion.y ) - ( self.y * quaternion.x ) - ( self.z * quaternion.w ) # is wrong
+        qNew.x = ( self.w * quaternion.x ) + ( self.x * quaternion.w ) + ( self.y * quaternion.z ) - ( self.z * quaternion.y ) # i would bet that at least one 
+        qNew.y = ( self.w * quaternion.y ) - ( self.x * quaternion.z ) + ( self.y * quaternion.w ) + ( self.z * quaternion.x ) # of the operations in this function
+        qNew.z = ( self.w * quaternion.z ) + ( self.x * quaternion.y ) - ( self.y * quaternion.x ) + ( self.z * quaternion.w ) # is wrong
+
+        # future ZegesMenden here - i was right
 
         return qNew
 
@@ -145,6 +158,16 @@ class Quaternion:
     def conj(self):
 
         return Quaternion(self.w, -self.x, -self.y, -self.z)
+
+    def __eq__(self, quaternion):
+        
+        if isinstance(quaternion, Quaternion):
+
+            if isclose(self.w, quaternion.w, rel_tol=0.01) and isclose(self.x, quaternion.x, rel_tol=0.01) and isclose(self.y, quaternion.y, rel_tol=0.01) and isclose(self.z, quaternion.z, rel_tol=0.01):
+                return True
+
+            else:
+                return False
     
     def eulerToQuaternion(self, roll, pitch, yaw):
         
@@ -164,12 +187,13 @@ class Quaternion:
         return self
 
     def quaternionToEuler(self):
-        
+
         r = np.arctan2( 2.0 * ( self.w * self.x + self.y * self.z ), 1.0 - 2.0 * ( self.x ** 2 + self.y ** 2 ) )
         p = 2.0 * ( self.w * self.y - self.z * self.x )
         y = np.arctan2( 2.0 * ( self.w * self.z + self.x * self.y ), 1.0 - 2.0 * ( self.y ** 2 + self.z ** 2 ) )
 
         return vector3(r, p, y)
+
 
     def rotateVector(self, vector):
 
@@ -179,3 +203,6 @@ class Quaternion:
             rVector = self * rVector * self.conj()
 
             return vector3(rVector.x, rVector.y, rVector.z)
+
+        else:
+            return False
