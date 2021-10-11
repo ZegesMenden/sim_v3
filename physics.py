@@ -1,9 +1,15 @@
 import numpy as np
-import math
+import random
 from math import isclose
+
+from pygame import error
 
 DEG_TO_RAD = np.pi / 180
 RAD_TO_DEG = 180 / np.pi
+
+def clamp(n, minn, maxn): # Clamps output to a range
+    return max(min(maxn, n), minn)
+#thanks orlando
 
 class vector3:
 
@@ -194,6 +200,35 @@ class Quaternion:
 
         return vector3(r, p, y)
 
+    def fromAxisAngle(self, t, x, y, z):
+        
+        st = np.sin(t / 2.0)
+
+        self.w = np.cos(t / 2.0)
+        self.x = x * st
+        self.x = y * st
+        self.x = z * st
+
+        return self
+
+    def updateOrientation(self, x, y, z, dt):
+
+        qD = Quaternion(0.0)
+
+        angle = vector3(x, y, z).len()
+
+        if angle == 0:
+            angle = 1e-5
+        
+        qD.fromAxisAngle(angle * dt, x/angle, y/angle, z/angle)
+
+        qM = self * qD
+        self.w = qM.w
+        self.x = qM.x
+        self.y = qM.y
+        self.z = qM.z
+
+        return self
 
     def rotateVector(self, vector):
 
@@ -206,3 +241,63 @@ class Quaternion:
 
         else:
             return False
+
+class TVC:
+    
+    def __init__(self):
+        
+        self.commandY = 0.0
+        self.commandZ = 0.0
+
+        self.positionY = 0.0
+        self.positionZ = 0.0
+
+        self.minY = 0.0
+        self.maxY = 0.0
+
+        self.minZ = 0.0
+        self.maxZ = 0.0
+
+        self.offsetY = 0.0
+        self.offsetZ = 0.0
+
+        self.noiseY = 0.0
+        self.noiseZ = 0.0
+
+        self.servoSpeed = 0.0
+
+        self.linkageRatioY = 0.0
+        self.linkageRatioZ = 0.0
+
+        self.lever = 0.0
+
+        self.torque = vector3(0.0, 0.0, 0.0)
+        self.acceleration = vector3(0.0, 0.0, 0.0)
+
+    def actuate(self, command_angles, dt):
+
+        self.commandY = command_angles.y
+        self.commandZ = command_angles.z
+
+        errorY = self.commandY - self.positionY
+        errorZ = self.commandZ - self.positionZ
+
+        speedY = self.servoSpeed * dt * self.linkageRatioY
+        speedZ = self.servoSpeed * dt * self.linkageRatioZ
+
+        errorY = clamp(errorY, -speedY, speedY)
+        errorZ = clamp(errorZ, -speedZ, speedZ)
+        
+        self.positionY += errorY + (random.randint(-100, 100) / 100) * self.noiseY
+        self.positionZ += errorZ + (random.randint(-100, 100) / 100) * self.noiseZ
+        
+        self.positionY = clamp(self.positionY, self.minY, self.maxY)
+        self.positionZ = clamp(self.positionZ, self.minZ, self.maxZ)
+
+    def calculateForces(self, thrust):
+        self.acceleration.y = np.sin(self.positionY * DEG_TO_RAD) * thrust
+        self.acceleration.z = np.sin(self.positionX * DEG_TO_RAD) * thrust
+        self.acceleration.x = thrust - self.acceleration.y - self.acceleration.z
+
+        self.torque.y = self.acceleration.y * self.lever
+        self.torque.z = self.acceleration.z * self.lever
