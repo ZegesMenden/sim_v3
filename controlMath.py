@@ -1,4 +1,12 @@
 import numpy as np
+import random
+from physics import *
+
+def positive_or_negative():
+    if random.random() < 0.5:
+        return 1
+    else:
+        return -1
 
 class PID:
     def __init__(self, kP, kI, kD, setpoint, iMax, usePONM):
@@ -19,9 +27,8 @@ class PID:
         #the proportional part of the controller looks at the change between the initial sensed value and the current sensed value
         
         self.usePONM = usePONM
-
-        if usePONM == True:
-            self.proportional = 0
+        
+        self.proportional = 0
 
         #this variable stores the most recent process variable, so that when update is called the PID controller can
         #know not only the current error, but also the speed at which it is approaching or departing from the setpoint!
@@ -32,6 +39,11 @@ class PID:
         #it's body, but its 10 degrees off target! the integral is crucial here as it increases over time with the error
         self.integral = 0
         self.error = 0
+
+        self.derivitive = 0 
+        #for dataloging purpouses
+
+        self.output = 0
 
     def setSetpoint(self, setpoint):
         self.setPoint = setpoint
@@ -51,18 +63,18 @@ class PID:
             #whats happening here is the proportional changing with the process variable
             self.proportional -= change * self.kP
         else:
-            proportional = self.error * self.kP
+            self.proportional = self.error * self.kP
 
         #checking that the integral will not exceed the maximum value allowed by the user
         if abs(self.integral + self.error * self.kI * dt) < self.iMax:
             self.integral += self.error * self.kI * dt
 
-        derivitive = change * self.kD / dt
+        self.derivitive = change / dt * self.kD
 
         if self.usePONM == True:
-            return self.proportional + self.integral - derivitive
+            self.output = self.proportional + self.integral - self.derivitive
         else:
-            return proportional + self.integral - derivitive
+            self.output = self.proportional + self.integral - self.derivitive
 
 class FSF:
     #gains
@@ -104,3 +116,41 @@ class FSF:
         self.lastPos = 0
         self.lastOri = 0
         self.I = 0
+
+class Sensor:
+
+    def __init__(self):
+
+        self.accelerometerNoise = vector3(0.0, 0.0, 0.0)
+        self.accelerometerOffset = vector3(0.0, 0.0, 0.0)
+
+        self.gyroscopeNoise = vector3(0.0, 0.0, 0.0)
+        self.gyroscopeBias = vector3(0.0, 0.0, 0.0)
+
+        self.oriRates = vector3(0.0, 0.0, 0.0)
+        self.orientation_quat = Quaternion()
+        self.orientation_euler = vector3(0.0, 0.0, 0.0)
+
+        self.accelerationLocal = vector3(0.0, 0.0, 0.0)
+        self.accelerationInertial = vector3(0.0, 0.0, 0.0)
+        self.velocityInertial = vector3(0.0, 0.0, 0.0)
+        self.positionInertial = vector3(0.0, 0.0, 0.0)
+
+    def update(self, acceleration, oriRate, dt):
+        
+        self.oriRates.x = oriRate.x + self.gyroscopeBias.x + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.x * positive_or_negative())
+        self.oriRates.y = oriRate.y + self.gyroscopeBias.y + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.y * positive_or_negative())
+        self.oriRates.z = oriRate.z + self.gyroscopeBias.z + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.z * positive_or_negative())
+        
+        self.orientation_quat.updateOrientation( self.oriRates.x, self.oriRates.y, self.oriRates.z, dt )
+        self.orientation_euler = self.orientation_quat.quaternionToEuler()
+
+        self.accelerationLocal.x = acceleration.x + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.x * positive_or_negative())
+        self.accelerationLocal.y = acceleration.y + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.y * positive_or_negative())
+        self.accelerationLocal.z = acceleration.z + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.z * positive_or_negative())
+
+        self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocal)
+
+        self.velocityInertial += self.accelerationInertial * dt
+        self.velocityInertial.x -= 9.8 * dt
+        self.positionInertial += self.velocityInertial * dt
