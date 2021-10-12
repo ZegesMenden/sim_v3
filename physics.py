@@ -11,6 +11,16 @@ def clamp(n, minn, maxn): # Clamps output to a range
     return max(min(maxn, n), minn)
 #thanks orlando
 
+def rotate(x, y, theta): # Rotates a 2D vector by an angle theta, returns a Vector3 with XY and a 0 Z component
+    cs = np.cos(theta)
+    sn = np.sin(theta)
+
+    rotated_x = x * cs - y * sn
+    rotated_y = x * sn + y * cs
+
+    return vector3(rotated_x, rotated_y, 0)
+#thanks orlando again
+
 class vector3:
 
     def __init__(self, x, y, z):
@@ -109,6 +119,9 @@ class vector3:
         self.z *= RAD_TO_DEG
 
         return self
+
+    def __str__(self):
+        return str(self.x) + ',' + str(self.y) + ',' + str(self.z)
     
 class Quaternion:
     
@@ -165,6 +178,9 @@ class Quaternion:
 
         return Quaternion(self.w, -self.x, -self.y, -self.z)
 
+    def __str__(self):
+        return str(self.w) + ',' + str(self.x) + ',' + str(self.y) + ',' + str(self.z)
+
     def __eq__(self, quaternion):
         
         if isinstance(quaternion, Quaternion):
@@ -202,25 +218,23 @@ class Quaternion:
 
     def fromAxisAngle(self, t, x, y, z):
         
-        st = np.sin(t / 2.0)
+        sn = np.sin(t / 2.0)
 
         self.w = np.cos(t / 2.0)
-        self.x = x * st
-        self.x = y * st
-        self.x = z * st
+        self.x = x * sn
+        self.y = y * sn
+        self.z = z * sn
 
         return self
 
     def updateOrientation(self, x, y, z, dt):
-
-        qD = Quaternion(0.0)
 
         angle = vector3(x, y, z).len()
 
         if angle == 0:
             angle = 1e-5
         
-        qD.fromAxisAngle(angle * dt, x/angle, y/angle, z/angle)
+        qD = Quaternion(0.0, 0.0, 0.0, 0.0).fromAxisAngle(angle * dt, x/angle, y/angle, z/angle)
 
         qM = self * qD
         self.w = qM.w
@@ -249,6 +263,7 @@ class TVC:
         self.commandY = 0.0
         self.commandZ = 0.0
 
+        self.positionX = 0.0
         self.positionY = 0.0
         self.positionZ = 0.0
 
@@ -282,22 +297,23 @@ class TVC:
         errorY = self.commandY - self.positionY
         errorZ = self.commandZ - self.positionZ
 
-        speedY = self.servoSpeed * dt * self.linkageRatioY
-        speedZ = self.servoSpeed * dt * self.linkageRatioZ
+        speedY = self.servoSpeed * dt / self.linkageRatioY
+        speedZ = self.servoSpeed * dt / self.linkageRatioZ
 
         errorY = clamp(errorY, -speedY, speedY)
         errorZ = clamp(errorZ, -speedZ, speedZ)
         
-        self.positionY += errorY + (random.randint(-100, 100) / 100) * self.noiseY
-        self.positionZ += errorZ + (random.randint(-100, 100) / 100) * self.noiseZ
+        self.positionX = 0.0
+        self.positionY += (errorY + (random.randint(-100, 100) / 100) * self.noiseY) * DEG_TO_RAD
+        self.positionZ += (errorZ + (random.randint(-100, 100) / 100) * self.noiseZ) * DEG_TO_RAD
         
-        self.positionY = clamp(self.positionY, self.minY, self.maxY)
-        self.positionZ = clamp(self.positionZ, self.minZ, self.maxZ)
+        self.positionY = clamp(self.positionY, self.minY * DEG_TO_RAD, self.maxY * DEG_TO_RAD)
+        self.positionZ = clamp(self.positionZ, self.minZ * DEG_TO_RAD, self.maxZ * DEG_TO_RAD)
 
     def calculateForces(self, thrust):
-        self.acceleration.y = np.sin(self.positionY * DEG_TO_RAD) * thrust
-        self.acceleration.z = np.sin(self.positionX * DEG_TO_RAD) * thrust
+        self.acceleration.y = np.sin(self.positionY) * thrust
+        self.acceleration.z = np.sin(self.positionZ) * thrust
         self.acceleration.x = thrust - self.acceleration.y - self.acceleration.z
 
-        self.torque.y = self.acceleration.y * self.lever
-        self.torque.z = self.acceleration.z * self.lever
+        self.torque.y = thrust * np.sin(self.positionY) * self.lever
+        self.torque.z = thrust * np.sin(self.positionZ) * self.lever
