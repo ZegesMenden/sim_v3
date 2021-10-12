@@ -2,6 +2,10 @@ import numpy as np
 import random
 from physics import *
 
+def calculateAngleFromDesiredTorque(moment_arm, force, mmoi, desired_torque):
+    calcval = desired_torque * mmoi / force / moment_arm
+    return np.arcsin(calcval)
+
 def positive_or_negative():
     if random.random() < 0.5:
         return 1
@@ -69,6 +73,17 @@ class PID:
         if abs(self.integral + self.error * self.kI * dt) < self.iMax:
             self.integral += self.error * self.kI * dt
 
+        # if abs(self.error > 5):
+        #     if change < 0:
+        #         self.derivitive = ((change / dt) + 30) * self.kD
+        #         if self.derivitive < 0:
+        #             self.derivitive = 0
+        #     if change > 0:
+        #         self.derivitive = ((change / dt) - 30) * self.kD
+        #         if self.derivitive > 0:
+        #             self.derivitive = 0
+        # else:
+    
         self.derivitive = change / dt * self.kD
 
         if self.usePONM == True:
@@ -136,7 +151,7 @@ class Sensor:
         self.velocityInertial = vector3(0.0, 0.0, 0.0)
         self.positionInertial = vector3(0.0, 0.0, 0.0)
 
-    def update(self, acceleration, oriRate, dt):
+    def update(self, acceleration, oriRate, gravity, dt):
         
         self.oriRates.x = oriRate.x + self.gyroscopeBias.x + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.x * positive_or_negative())
         self.oriRates.y = oriRate.y + self.gyroscopeBias.y + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.y * positive_or_negative())
@@ -150,7 +165,7 @@ class Sensor:
         self.accelerationLocal.z = acceleration.z + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.z * positive_or_negative())
 
         self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocal)
+        self.accelerationInertial += gravity
 
         self.velocityInertial += self.accelerationInertial * dt
-        self.velocityInertial.x -= 9.8 * dt
         self.positionInertial += self.velocityInertial * dt

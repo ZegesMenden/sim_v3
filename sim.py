@@ -1,4 +1,3 @@
-from os import times
 from physics import *
 from dataVisualisation import *
 from dataManagement import *
@@ -15,6 +14,27 @@ RAD_DEG = 180 / np.pi
 
 data_list = ['time','ori_x_roll','ori_y_pitch','ori_z_yaw','ori_x_roll_sensed','ori_y_pitch_sensed','ori_z_yaw_sensed','reaction_wheel_output_x_roll','actuator_output_y_pitch','actuator_output_z_yaw','reaction_wheel_output_x_roll_p','actuator_output_y_pitch_p','actuator_output_z_yaw_p','reaction_wheel_output_x_roll_i','actuator_output_y_pitch_i','actuator_output_z_yaw_i','reaction_wheel_output_x_roll_d','actuator_output_y_pitch_d','actuator_output_z_yaw_d','ori_x_roll_setpoint','ori_y_pitch_setpoint','ori_z_yaw_setpoint','ori_x_roll_velocity','ori_y_pitch_velocity','ori_z_yaw_velocity','ori_x_roll_velocity_sensed','ori_y_pitch_velocity_sensed','ori_z_yaw_velocity_sensed','x_position','y_position','z_position','x_position_sensed','y_position_sensed','z_position_sensed','x_velocity','y_velocity','z_velocity','x_velocity_sensed','y_velocity_sensed','z_velocity_sensed','resultant_velocity','resultant_velocity_sensed','x_acceleration','y_acceleration','z_acceleration','x_acceleration_sensed','y_acceleration_sensed','z_acceleration_sensed','x_acceleration_inertial','y_acceleration_inertial','z_acceleration_inertial','x_acceleration__inertial_sensed','y_acceleration__inertial_sensed','z_acceleration__inertial_sensed','resultant_acceleration','resultant_acceleration_sensed','thrust','mass']
 
+# Print iterations progress
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
 
 posPlot = dataVisualiser()
 posPlot.allDataDescriptions = data_list
@@ -114,21 +134,33 @@ rocket.dataLogger.fileName = "data_out.csv"
 rocket.dataLogger.initCSV(True, True)
 
 rocket.dryMass = 0.6
-motor = rocketMotor(500)
+motor = rocketMotor(1000)
 
-motor.add_motor(motorType.e12, "ascent")
+motor.add_motor(motorType.d12, "ascent")
 rocket.mass = rocket.dryMass + motor.totalMotorMass
 
-rocket.mmoi = vector3(0.0602, 0.0504203354, 0.0504203354)
-rocket.rotation_euler = vector3(0, 0.1 * DEG_TO_RAD, -0.1 * DEG_TO_RAD)
+rocket.mmoi = vector3(0.0602, 0.0404203354, 0.0404203354)
+rocket.rotation_euler = vector3(0, random.randint(-100, 100) / 50 * DEG_TO_RAD, random.randint(-100, 100) / 50 * DEG_TO_RAD)
 rocket.rotaiton_quaternion = Quaternion().eulerToQuaternion(rocket.rotation_euler.x, rocket.rotation_euler.y, rocket.rotation_euler.z)
 rocket.gravity = vector3(-9.83, 0.0, 0.0)
 
 maxPosition = 0.0
 
 PID_ori_X = PID(0, 0, 0, 0, 0, False)
-PID_ori_Y = PID(1.7, 0, 0.01, 0, 5, False)
-PID_ori_Z = PID(1.7, 0, 0.01, 0, 5, False)
+PID_ori_Y = PID(2, 0.2, 0.4, 0, 2, False)
+PID_ori_Z = PID(2, 0.2, 0.4, 0, 2, False)
+
+PID_position_Y = PID(4, 4, 0, 0, 999, True)
+PID_position_Z = PID(4, 4, 0, 0, 999, True)
+
+fsf_gains_Y = np.matrix([5, 3, 0.0, 0.0])
+fsf_setpoint_Y = np.array([0.0, 0.0, 0.0, 0.0])
+
+fsf_gains_Z = np.matrix([5, 3, 0.0, 0.0])
+fsf_setpoint_Z = np.array([0.0, 0.0, 0.0, 0.0])
+
+FSF_ori_Y = FSF(fsf_gains_Y, fsf_setpoint_Y, 0.01)
+FSF_ori_Z = FSF(fsf_gains_Z, fsf_setpoint_Z, 0.01)
 
 rocket_TVC = TVC()
 
@@ -136,8 +168,8 @@ rocket_TVC.lever = 0.24
 rocket_TVC.linkageRatioZ = 4
 rocket_TVC.linkageRatioY = 4
 
-rocket_TVC.noiseY = 0.01
-rocket_TVC.noiseZ = 0.01
+rocket_TVC.noiseY = 0
+rocket_TVC.noiseZ = 0
 
 rocket_TVC.servoSpeed = 250
 
@@ -153,10 +185,10 @@ tvc_z = 0.0
 
 IMU = Sensor()
 
-IMU.gyroscopeNoise = vector3(0.3, 0.3, 0.3)
-IMU.gyroscopeBias = vector3(random.randint(40, 100) / 100 * positive_or_negative() * 0.005, random.randint(40, 100) / 100 * positive_or_negative() * 0.005, random.randint(40, 100) / 100 * positive_or_negative() * 0.005)
+IMU.gyroscopeNoise = vector3(0.2, 0.2, 0.2)
+IMU.gyroscopeBias = vector3(random.randint(40, 100) / 100 * positive_or_negative() * 0, random.randint(40, 100) / 100 * positive_or_negative() * 0, random.randint(40, 100) / 100 * positive_or_negative() * 0)
 
-IMU.accelerometerNoise = vector3(0.03, 0.03, 0.03)
+IMU.accelerometerNoise = vector3(0.4, 0.4, 0.4)
 IMU.accelerometerOffset = vector3((random.randint(40, 100) / 100 * positive_or_negative()) * 0.05, (random.randint(40, 100) / 100 * positive_or_negative()) * 0.05, (random.randint(40, 100) / 100 * positive_or_negative()) * 0.05)
 
 IMU.orientation_quat = rocket.rotaiton_quaternion
@@ -165,9 +197,11 @@ apogee = False
 
 time = 0.0
 timeStep = 1000
-simTime = 60
+simTime = 20
 
-sensorDelay = 1 / timeStep
+totalSteps = simTime * timeStep
+currentStep = 0
+sensorDelay = 2 / timeStep
 lastSensor = 0.0
 
 PIDSpeed = 50
@@ -185,32 +219,49 @@ motor.ignite("ascent", time)
 setpoint = 0
 
 while time < simTime:
+    printProgressBar(currentStep, totalSteps, prefix="% complete (time based)")
+    currentStep += 1
     time += dt
 
-    if time > 0.6 and time < 1.6:
-        setpoint -= 10 * dt
-        PID_ori_Z.setSetpoint(setpoint)
-
+    # if time > 0.5 and time < 1:
+    #     setpoint += 10 * dt
+    #     PID_ori_Z.setSetpoint(setpoint)
+    
     motor.update(time)
     rocket_TVC.calculateForces(motor.currentThrust)
 
+    rocket.mass = rocket.dryMass + motor.totalMotorMass
+
     rocket.addForce(rocket_TVC.acceleration)
     rocket.addTorque(rocket_TVC.torque)
+    rocket.addTorque(rocket.rotationalVelocity * -0.05)
 
     rocket_TVC.actuate(vector3(0.0, TVC_derolled.x, TVC_derolled.y ), dt)
-
-    if time > lastSensor + sensorDelay:
-        IMU.update(rocket.accelerationLocal, rocket.rotationalVelocity, sensorDelay)
-        lastSensor = time
+    
+    IMU.update(rocket.accelerationLocal, rocket.rotationalVelocity, rocket.gravity, dt)
 
     if time > lastPID + PIDDelay and rocket.accelerationLocal.x > 4:
         
-        PID_ori_Y.compute(rocket.rotation_euler.y * RAD_TO_DEG, PIDDelay)
-        PID_ori_Z.compute(rocket.rotation_euler.z * RAD_TO_DEG, PIDDelay)
+        # PID_position_Y.compute(IMU.positionInertial.y, PIDDelay)
+        # PID_position_Z.compute(IMU.positionInertial.z, PIDDelay)
 
-        tvc_y = PID_ori_Y.output * DEG_TO_RAD
-        tvc_z = PID_ori_Z.output * DEG_TO_RAD
+        # PID_ori_Y.setSetpoint(-PID_position_Y.output)
+        # PID_ori_Z.setSetpoint(-PID_position_Z.output)
+
+        # PID_ori_Y.compute(rocket.rotation_euler.y * RAD_TO_DEG, PIDDelay)
+        # PID_ori_Z.compute(rocket.rotation_euler.z * RAD_TO_DEG, PIDDelay)
+
+        FSF_ori_Y.compute(0.0, IMU.orientation_euler.y * RAD_DEG, PIDDelay)
+        FSF_ori_Z.compute(0.0, IMU.orientation_euler.z * RAD_DEG, PIDDelay)
+
+        # tvc_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.y, PID_ori_Y.output) 
+        # tvc_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.z, PID_ori_Z.output)
         
+        tvc_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.y, FSF_ori_Y.output) 
+        tvc_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.z, FSF_ori_Z.output)
+        
+
+
         TVC_derolled = rotate(tvc_y, tvc_z, -IMU.orientation_euler.x)
 
         lastPID = time
@@ -325,7 +376,7 @@ while time < simTime:
     if rocket.positionInertial.x <= 0 and apogee == True:
         break
     
-plot_position = posPlot.graph_from_csv(['time', 'x_position', 'y_position', 'z_position'])
+plot_position = posPlot.graph_from_csv(['time', 'x_position', 'y_position', 'z_position', 'x_position_sensed', 'y_position_sensed', 'z_position_sensed'])
 # 'ori_x_roll_sensed', 'ori_y_pitch_sensed', 'ori_z_yaw_sensed',
 ori_plot_points = ['time', 'ori_x_roll', 'ori_y_pitch', 'ori_z_yaw', 'actuator_output_y_pitch', 'actuator_output_z_yaw'] #, 'actuator_output_y_pitch_p', 'actuator_output_y_pitch_i', 'actuator_output_y_pitch_d', 'actuator_output_z_yaw_p', 'actuator_output_z_yaw_i', 'actuator_output_z_yaw_d' ]
 plot_ori = oriPlot.graph_from_csv(ori_plot_points)
@@ -334,9 +385,10 @@ ax = plt.axes(projection='3d')
 ax.set_xlim3d(-maxPosition, maxPosition)
 ax.set_ylim3d(-maxPosition, maxPosition)
 ax.set_zlim3d(0, maxPosition)
-ax.plot3D(plot_position[3], plot_position[2], plot_position[1], 'green')
+# ax.plot3D(plot_position[3], plot_position[2], plot_position[1], 'green')
 
-ax.scatter3D(plot_position[3], plot_position[2], plot_position[1], c=plot_position[3], cmap='Blues');
+ax.scatter3D(plot_position[3], plot_position[2], plot_position[1], c=plot_position[3], cmap='Blues')
+ax.scatter3D(plot_position[6], plot_position[5], plot_position[4], c=plot_position[6], cmap='Greens')
 
 plt.figure(2)
 
