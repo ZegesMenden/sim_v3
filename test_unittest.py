@@ -19,7 +19,7 @@ class test_vector_math(unittest.TestCase):
         self.assertEqual( vector3(1.0, 1.0, 1.0) / vector3(2.0, 2.0, 2.0), vector3(0.5, 0.5, 0.5) )
 
     def test_norm(self):
-        self.assertEqual( vector3(5.0, 5.0, 5.0).norm().x, vector3(0.5773502691896257, 0.5773502691896257, 0.5773502691896257).x )
+        self.assertEqual( vector3(5.0, 5.0, 5.0).norm(), vector3(0.5773502691896257, 0.5773502691896257, 0.5773502691896257) )
 
     def test_len(self):
         self.assertEqual( vector3(5.0, 5.0, 5.0).len(), 8.660254037844387 )
