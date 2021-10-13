@@ -33,7 +33,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     bar = fill * filledLength + '-' * (length - filledLength)
     print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
     # Print New Line on Complete
-    if iteration == total: 
+    if iteration == total:
         print()
 
 posPlot = dataVisualiser()
@@ -136,7 +136,7 @@ rocket.dataLogger.initCSV(True, True)
 rocket.dryMass = 0.6
 motor = rocketMotor(1000)
 
-motor.add_motor(motorType.d12, "ascent")
+motor.add_motor(motorType.e12, "ascent")
 rocket.mass = rocket.dryMass + motor.totalMotorMass
 
 rocket.mmoi = vector3(0.0602, 0.0404203354, 0.0404203354)
@@ -150,14 +150,14 @@ PID_ori_X = PID(0, 0, 0, 0, 0, False)
 PID_ori_Y = PID(2, 0.2, 0.4, 0, 2, False)
 PID_ori_Z = PID(2, 0.2, 0.4, 0, 2, False)
 
-PID_position_Y = PID(4, 4, 0, 0, 999, True)
-PID_position_Z = PID(4, 4, 0, 0, 999, True)
+PID_position_Y = PID(5, 5, 0, 1, 999, True)
+PID_position_Z = PID(5, 5, 0, 1, 999, True)
 
-fsf_gains_Y = np.matrix([5, 3, 0.0, 0.0])
-fsf_setpoint_Y = np.array([0.0, 0.0, 0.0, 0.0])
+fsf_gains_Y = np.matrix([1, 2, 0.0, 0.0])
+fsf_setpoint_Y = np.array([5.0, 0.0, 0.0, 0.0])
 
-fsf_gains_Z = np.matrix([5, 3, 0.0, 0.0])
-fsf_setpoint_Z = np.array([0.0, 0.0, 0.0, 0.0])
+fsf_gains_Z = np.matrix([1, 2, 0.0, 0.0])
+fsf_setpoint_Z = np.array([5.0, 0.0, 0.0, 0.0])
 
 FSF_ori_Y = FSF(fsf_gains_Y, fsf_setpoint_Y, 0.01)
 FSF_ori_Z = FSF(fsf_gains_Z, fsf_setpoint_Z, 0.01)
@@ -197,7 +197,7 @@ apogee = False
 
 time = 0.0
 timeStep = 1000
-simTime = 20
+simTime = 30
 
 totalSteps = simTime * timeStep
 currentStep = 0
@@ -226,7 +226,8 @@ while time < simTime:
     # if time > 0.5 and time < 1:
     #     setpoint += 10 * dt
     #     PID_ori_Z.setSetpoint(setpoint)
-    
+    #     PID_ori_Y.setSetpoint(setpoint)
+
     motor.update(time)
     rocket_TVC.calculateForces(motor.currentThrust)
 
@@ -237,30 +238,41 @@ while time < simTime:
     rocket.addTorque(rocket.rotationalVelocity * -0.05)
 
     rocket_TVC.actuate(vector3(0.0, TVC_derolled.x, TVC_derolled.y ), dt)
-    
+
     IMU.update(rocket.accelerationLocal, rocket.rotationalVelocity, rocket.gravity, dt)
 
     if time > lastPID + PIDDelay and rocket.accelerationLocal.x > 4:
-        
+
+        ### uncomment for position control PID
+
         # PID_position_Y.compute(IMU.positionInertial.y, PIDDelay)
         # PID_position_Z.compute(IMU.positionInertial.z, PIDDelay)
 
         # PID_ori_Y.setSetpoint(-PID_position_Y.output)
-        # PID_ori_Z.setSetpoint(-PID_position_Z.output)
+        # PID_ori_Z.setSetpoint(PID_position_Z.output)
+
+        ### uncomment for PID
 
         # PID_ori_Y.compute(rocket.rotation_euler.y * RAD_TO_DEG, PIDDelay)
         # PID_ori_Z.compute(rocket.rotation_euler.z * RAD_TO_DEG, PIDDelay)
 
+        ### uncommend for direct output PID
+
+        # tvc_y = PID_ori_Y.output * DEG_TO_RAD
+        # tvc_z = PID_ori_Z.output * DEG_TO_RAD
+
+        ### uncomment for torque based PID
+
+        # tvc_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.y, PID_ori_Y.output)
+        # tvc_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.z, PID_ori_Z.output)
+
+        ### uncomment for FSF
+
         FSF_ori_Y.compute(0.0, IMU.orientation_euler.y * RAD_DEG, PIDDelay)
         FSF_ori_Z.compute(0.0, IMU.orientation_euler.z * RAD_DEG, PIDDelay)
 
-        # tvc_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.y, PID_ori_Y.output) 
-        # tvc_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.z, PID_ori_Z.output)
-        
-        tvc_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.y, FSF_ori_Y.output) 
+        tvc_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.y, FSF_ori_Y.output)
         tvc_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.z, FSF_ori_Z.output)
-        
-
 
         TVC_derolled = rotate(tvc_y, tvc_z, -IMU.orientation_euler.x)
 
@@ -282,7 +294,7 @@ while time < simTime:
         rocket.dataLogger.recordVariable("reaction_wheel_output_x_roll", PID_ori_X.output)
         rocket.dataLogger.recordVariable("actuator_output_y_pitch", rocket_TVC.positionY * RAD_TO_DEG)
         rocket.dataLogger.recordVariable("actuator_output_z_yaw", rocket_TVC.positionZ * RAD_TO_DEG)
-        
+
         rocket.dataLogger.recordVariable("reaction_wheel_output_x_roll_p", PID_ori_X.proportional)
         rocket.dataLogger.recordVariable("actuator_output_y_pitch_p", PID_ori_Y.proportional)
         rocket.dataLogger.recordVariable("actuator_output_z_yaw_p", PID_ori_Z.proportional)
@@ -360,22 +372,22 @@ while time < simTime:
     # rocket.rotaiton_quaternion = Quaternion().eulerToQuaternion(0.0, rocket.rotation_euler.y, rocket.rotation_euler.z)
 
     rocket.update(dt)
-    
+
     if abs(rocket.positionInertial.x) > maxPosition:
         maxPosition = abs(rocket.positionInertial.x)
-    
+
     if abs(rocket.positionInertial.y) > maxPosition:
         maxPosition = abs(rocket.positionInertial.y)
-    
+
     if abs(rocket.positionInertial.z) > maxPosition:
         maxPosition = abs(rocket.positionInertial.z)
 
     if rocket.velocityInertial.x < 0:
         apogee = True
-    
+
     if rocket.positionInertial.x <= 0 and apogee == True:
         break
-    
+
 plot_position = posPlot.graph_from_csv(['time', 'x_position', 'y_position', 'z_position', 'x_position_sensed', 'y_position_sensed', 'z_position_sensed'])
 # 'ori_x_roll_sensed', 'ori_y_pitch_sensed', 'ori_z_yaw_sensed',
 ori_plot_points = ['time', 'ori_x_roll', 'ori_y_pitch', 'ori_z_yaw', 'actuator_output_y_pitch', 'actuator_output_z_yaw'] #, 'actuator_output_y_pitch_p', 'actuator_output_y_pitch_i', 'actuator_output_y_pitch_d', 'actuator_output_z_yaw_p', 'actuator_output_z_yaw_i', 'actuator_output_z_yaw_d' ]
@@ -393,7 +405,7 @@ ax.scatter3D(plot_position[6], plot_position[5], plot_position[4], c=plot_positi
 plt.figure(2)
 
 for index, dataPoint in enumerate(plot_ori):
-    if index > 0:   
+    if index > 0:
         plt.plot(plot_ori[0], dataPoint, label=ori_plot_points[index])
 plt.legend()
 plt.xlabel("time")
