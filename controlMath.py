@@ -93,10 +93,10 @@ class PID:
 
 class FSF:
     #gains
-    fsf_gains = np.matrix([0,0,0,0])
+    # fsf_gains = np.matrix([0,0,0,0])
 
     #setpoints (ori, rotVel, position, velocity)
-    fsf_setpoint = np.array([0,0,0,0])
+    # fsf_setpoint = np.array([0,0,0,0])
 
     lastOri = 0
     lastPos = 0
@@ -112,9 +112,9 @@ class FSF:
     def compute(self, pos, ori, dt):
         x = np.matrix([
             [ori - self.fsf_setpoint[0]],
-            [((ori - self.lastOri) * dt) - self.fsf_setpoint[1]],
+            [((ori - self.lastOri) / dt) - self.fsf_setpoint[1]],
             [pos - self.fsf_setpoint[2]],
-            [((pos - self.lastPos) * dt) - self.fsf_setpoint[3]]
+            [((pos - self.lastPos)) - self.fsf_setpoint[3]]
         ])
         out = -self.fsf_gains * x
         self.output = np.sum(out)
@@ -153,16 +153,16 @@ class Sensor:
 
     def update(self, acceleration, oriRate, gravity, dt):
         
-        self.oriRates.x = oriRate.x + self.gyroscopeBias.x + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.x * positive_or_negative())
-        self.oriRates.y = oriRate.y + self.gyroscopeBias.y + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.y * positive_or_negative())
-        self.oriRates.z = oriRate.z + self.gyroscopeBias.z + ((random.randint(0, 100) / 100) * self.gyroscopeNoise.z * positive_or_negative())
+        self.oriRates.x = oriRate.x + self.gyroscopeBias.x + ((random.randint(60, 100) / 100) * self.gyroscopeNoise.x * positive_or_negative())
+        self.oriRates.y = oriRate.y + self.gyroscopeBias.y + ((random.randint(60, 100) / 100) * self.gyroscopeNoise.y * positive_or_negative())
+        self.oriRates.z = oriRate.z + self.gyroscopeBias.z + ((random.randint(60, 100) / 100) * self.gyroscopeNoise.z * positive_or_negative())
         
         self.orientation_quat.updateOrientation( self.oriRates.x, self.oriRates.y, self.oriRates.z, dt )
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
 
-        self.accelerationLocal.x = acceleration.x + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.x * positive_or_negative())
-        self.accelerationLocal.y = acceleration.y + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.y * positive_or_negative())
-        self.accelerationLocal.z = acceleration.z + ((random.randint(-100, 100) / 100) * self.accelerometerNoise.z * positive_or_negative())
+        self.accelerationLocal.x = acceleration.x + ((random.randint(60, 100) / 100) * self.accelerometerNoise.x * positive_or_negative())
+        self.accelerationLocal.y = acceleration.y + ((random.randint(60, 100) / 100) * self.accelerometerNoise.y * positive_or_negative())
+        self.accelerationLocal.z = acceleration.z + ((random.randint(60, 100) / 100) * self.accelerometerNoise.z * positive_or_negative())
 
         self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocal)
         self.accelerationInertial += gravity

@@ -256,6 +256,15 @@ class Quaternion:
         else:
             return False
 
+    def getVectorGuidance(self, vec):
+        target = vec.norm()
+        target = self.conj().rotateVector(target)
+
+        y_out = np.arctan2(-target.z, target.x)
+        z_out = np.arctan2(target.y, target.x)
+
+        return vector3(0.0, y_out, z_out)
+
 class TVC:
     
     def __init__(self):

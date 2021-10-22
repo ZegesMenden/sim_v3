@@ -341,6 +341,7 @@ class rocketMotor:
         self.totalMotorMass = 0.0
         self.lastTime = 0.0
         self.isLit = {}
+        self.throttlePercent = 1.0 #1 = full throttle
 
     def add_motor(self, motor, motorName):
         self.totalMotorMass += 0.025
@@ -364,9 +365,12 @@ class rocketMotor:
             if self.isLit[motor] == True:
                 counter = int((time * self.timeStep) - self.ignitionTimes[motor])
                 if counter > 0 and counter < len(self.thrustLists[motor]):
-                    self.currentThrust = self.thrustLists[motor][counter]
+                    self.currentThrust = self.thrustLists[motor][counter] * self.throttlePercent
                     self.totalMotorMass -= 0.004 * dt
                 else:
                     self.currentThrust = 0.0
 
         self.lastTime = time
+
+    def throttle(self, percent):
+        self.throttlePercent = 1.0 - percent

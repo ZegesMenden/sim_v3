@@ -1,4 +1,6 @@
 import os
+import csv
+from physics import *
 
 class dataLogger:
     def __init__(self):
@@ -97,3 +99,43 @@ class dataLogger:
             return self.currentLog[str(variableName)]
         else:
             raise IndexError("datapoint not initialized")
+    
+class flightPath:
+
+    def __init__(self):
+        self.setpoint = 0.0
+        self.setpoints = []
+        self.currentSetpoint = vector3(0,0,0)
+
+    def loadFlightPath(self, fName):
+        with open(fName, newline='\n') as pathFile:
+            reader = csv.reader(pathFile, delimiter=',', quotechar='"')
+            for row in reader:
+                self.setpoints.append([float(row[0]), float(row[1]), float(row[2]), float(row[3])])
+        
+    def getCurrentSetpoint(self, time):
+
+        setpointLast = [0, 0, 0, 0]
+        setpointFuture = [0, 0, 0, 0]
+
+        for index, datapoint in enumerate(self.setpoints):
+ 
+            if datapoint[0] < time:
+                setpointLast = datapoint
+
+            if datapoint[0] > time and setpointFuture == [0, 0, 0, 0]:
+                setpointFuture = datapoint
+            
+            if index == len(self.setpoints) - 1 and setpointFuture == [0, 0, 0, 0]:
+                setpointFuture = self.setpoint[-1]
+
+        if setpointFuture != [0, 0, 0, 0]:
+
+            timeDiff = setpointFuture[0] - setpointLast[0]
+            setpointDiff = vector3(setpointFuture[1], setpointFuture[2], setpointFuture[3]) - vector3(setpointLast[1], setpointLast[2], setpointLast[3])
+
+            rateOfChange = vector3(0.0, 0.0, 0.0)
+            rateOfChange = setpointDiff / timeDiff
+            self.currentSetpoint = vector3(setpointLast[1], setpointLast[2], setpointLast[3]) + rateOfChange * (time - setpointLast[0])
+        
+        return self.currentSetpoint
