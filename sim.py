@@ -137,7 +137,7 @@ rocket.dataLogger.fileName = "data_out.csv"
 
 rocket.dataLogger.initCSV(True, True)
 
-rocket.dryMass = 0.8
+rocket.dryMass = 0.85
 motor = rocketMotor(1000)
 
 motor.add_motor(motorType.e12, "ascent")
@@ -150,6 +150,18 @@ rocket.rotation_euler = vector3(0, random.randint(-100, 100) / 200 * DEG_TO_RAD,
 rocket.rotaiton_quaternion = Quaternion().eulerToQuaternion(rocket.rotation_euler.x, rocket.rotation_euler.y, rocket.rotation_euler.z)
 rocket.gravity = vector3(-9.83, 0.0, 0.0)
 
+def getAngleFromDesiredAcceleration(desired_acceleration, thrust):
+    return np.arcsin(desired_acceleration*rocket.mass/thrust)
+    
+
+def calculateLateralAcceleration(mass, force, body_angle, actuator_angle):
+    """calculates the lateral acceleration of the body based on the angle of the body and the force applied. USE RADIANS."""
+    force_on_body = np.cos(actuator_angle) * force
+    return ((np.sin(body_angle) * force_on_body) / mass)
+
+
+print(calculateLateralAcceleration(rocket.mass, 10, getAngleFromDesiredAcceleration(0.1, 10), 0))
+
 ori_setpoint = flightPath()
 ori_setpoint.loadFlightPath('flightPath.csv')
 
@@ -161,8 +173,8 @@ PID_ori_X = PID(0, 0, 0, 0, 0, False)
 PID_ori_Y = PID(1.8, 0.2, 0.4, 0, 2, False)
 PID_ori_Z = PID(1.8, 0.2, 0.4, 0, 2, False)
 
-PID_position_Y = PID(5, 5, 0, 1, 999, True)
-PID_position_Z = PID(5, 5, 0, 1, 999, True)
+PID_position_Y = PID(2, 0, 0.5, 0, 0, False)
+PID_position_Z = PID(2, 0, 0.5, 0, 0, False)
 
 fsf_gains_Y = np.matrix([10.32050808, 4.83390801, 0, 0])
 fsf_setpoint_Y = np.array([0.0, 0.0, 0, 0.0])
@@ -196,11 +208,11 @@ tvc_z = random.randint(-100, 100) / 100 * DEG_TO_RAD
 
 IMU = Sensor()
 
-IMU.gyroscopeNoise = vector3(0.2, 0.2, 0.2)
+IMU.gyroscopeNoise = vector3(0.1, 0.1, 0.1)
 IMU.gyroscopeBias = vector3(random.randint(40, 100) / 100 * positive_or_negative() * 0, random.randint(40, 100) / 100 * positive_or_negative() * 0, random.randint(40, 100) / 100 * positive_or_negative() * 0)
 
-IMU.accelerometerNoise = vector3(0, 0, 0)
-IMU.accelerometerOffset = vector3((random.randint(40, 100) / 100 * positive_or_negative()) * 0.01, (random.randint(40, 100) / 100 * positive_or_negative()) * 0.01, (random.randint(40, 100) / 100 * positive_or_negative()) * 0.01)
+IMU.accelerometerNoise = vector3(0.1, 0.1, 0.1)
+IMU.accelerometerOffset = vector3((random.randint(40, 100) / 100 * positive_or_negative()) * 0.001, (random.randint(40, 100) / 100 * positive_or_negative()) * 0.001, (random.randint(40, 100) / 100 * positive_or_negative()) * 0.001)
 
 IMU.orientation_quat = rocket.rotaiton_quaternion
 
@@ -245,6 +257,8 @@ targetAccel = 0.0
 
 setpoint = vector3(0.0, 0.0, 0.0)
 
+lastAccel = 0.0
+
 while time < simTime:
     
     # printProgressBar(currentStep, totalSteps, prefix="% complete (time based)")
@@ -275,10 +289,9 @@ while time < simTime:
         if IMUApogee == False:
             motor.throttle(0)
 
-        if IMU.velocityInertial.x < 0 and IMU.positionInertial.x > 10 and IMUApogee == False:
+        if IMU.velocityInertial.x < 0 and IMU.positionInertial.x > 1 and IMUApogee == False:
             IMUApogee = True
-            rocket.dryMass -= 0.15
-            burnAlt = 0.5 * IMU.positionInertial.x
+            burnAlt = 0.72 * IMU.positionInertial.x
             # print(burnAlt)
 
         if IMU.velocityInertial.x < 0 and IMU.positionInertial.x > burnAlt:
@@ -293,35 +306,37 @@ while time < simTime:
         if IMU.positionInertial.x < burnAlt and IMUApogee == True:
             motor.ignite("landing", time)
 
-        if IMUApogee == True and retroPeak == False and IMU.accelerationLocal.x > 45:
+        if IMUApogee == True and retroPeak == False and IMU.accelerationLocal.x > 15 and IMU.accelerationLocal.x < lastAccel:
             retroPeak = True
             retroPeakTime = time        
 
-        # #this is a super important time for the rocket because its where we run a bunch of calculations about where we are and how fast we need to go
-        # if time > retroPeakTime + 0.3 and retroPeak == True and retroCalculated == False and IMUApogee == True:
-        #     retroCalculated = True
-        #     finalVel_noBurn = IMU.velocityInertial.x + 9
-        #     if finalVel_noBurn > 0:
-        #         percentLost_desired = 1 - abs(rocket.velocityInertial.x / 7)
-        #         print(percentLost_desired)
-        #         throttlePercent = percentLost_desired
+        # if IMUApogee == True and retroPeak == True and IMU.velocityInertial.x > -5:
+        #     throttlePercent = IMU.velocityInertial.x + IMU.positionInertial.x + 0.5
 
-        if IMUApogee == True and time > retroPeakTime and retroPeak == True:
-            throttlePercent = (IMU.velocityInertial.x + 1) * 5
+        if time > retroPeakTime + 0.05 and retroPeak == True:
+            timeSincePeak = time - retroPeakTime - 0.05
+            totalDV = 7.5
+            burnTimeAfterPeak = 2.1
 
+            DVLeft =  (burnTimeAfterPeak - timeSincePeak) * totalDV
+
+            if abs(IMU.velocityInertial.x) < totalDV:
+                throttlePercent = ( totalDV / abs(IMU.velocityInertial.x) ) / 100
+                # print(throttlePercent)
+        
         # test for krushnic throttling
         # motor.throttle(0.2) # we want to lose 20% thrust?   
         
-        if throttlePercent > 0.25:
-            throttlePercent = 0.25
+        if throttlePercent > 0.05:
+            throttlePercent = 0.05
         if throttlePercent < 0:
             throttlePercent = 0
 
         motor.throttle(throttlePercent)
 
+        lastAccel = IMU.accelerationLocal.x
 
         lastSensor = time
-
 
     if time > lastPID + PIDDelay and rocket.accelerationLocal.x > 4:
 
@@ -330,7 +345,9 @@ while time < simTime:
         ### uncommend for flight path following
         
         # setpoint = IMU.orientation_quat.getVectorGuidance(ori_setpoint.getCurrentSetpoint(time) * DEG_TO_RAD)
-        setpoint = ori_setpoint.getCurrentSetpoint(time)
+
+        # setpoint = ori_setpoint.getCurrentSetpoint(time)
+        # setpoint = IMU.orientation_quat.rotateVector(setpoint * DEG_TO_RAD)
 
         ### uncomment for PID flight path following
 
@@ -340,13 +357,23 @@ while time < simTime:
 
         ### uncomment for FSF path following
 
-        FSF_ori_Y.fsf_setpoint[0] = setpoint.y * DEG_TO_RAD
-        FSF_ori_Z.fsf_setpoint[0] = setpoint.z * DEG_TO_RAD
+        # FSF_ori_Y.fsf_setpoint[0] = setpoint.y
+        # FSF_ori_Z.fsf_setpoint[0] = setpoint.z
 
         ### uncomment for position control PID
 
-        # PID_position_Y.compute(IMU.positionInertial.y, PIDDelay)
-        # PID_position_Z.compute(IMU.positionInertial.z, PIDDelay)
+        velocity_setpoint = vector3(0.0, 0.0, 0.0)
+
+        if time > 0.5 and time < 3:
+            velocity_setpoint = vector3(0.0, 0.5, 0.0)
+        if time > 3:
+            velocity_setpoint = vector3(0.0, 0.0, 0.0)
+
+        PID_position_Y.setSetpoint(velocity_setpoint.y)
+        PID_position_Z.setSetpoint(velocity_setpoint.z)
+
+        PID_position_Y.compute(IMU.velocityInertial.y, PIDDelay)
+        PID_position_Z.compute(IMU.velocityInertial.z, PIDDelay)
 
         # PID_ori_Y.setSetpoint(-PID_position_Y.output)
         # PID_ori_Z.setSetpoint(PID_position_Z.output)
@@ -367,6 +394,18 @@ while time < simTime:
         # tvc_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, IMU.accelerationLocal.x, rocket.mmoi.z, PID_ori_Z.output)
 
         ### uncomment for FSF
+        
+        setpoint.y = getAngleFromDesiredAcceleration(-PID_position_Z.output, IMU.accelerationLocal.x)
+        setpoint.z = getAngleFromDesiredAcceleration(PID_position_Y.output, IMU.accelerationLocal.x)
+
+        setpoint = IMU.orientation_quat.rotateVector(setpoint)
+
+        FSF_ori_Y.fsf_setpoint[0] = setpoint.y
+        FSF_ori_Z.fsf_setpoint[0] = setpoint.z
+        
+        if IMUApogee == True and time > retroPeakTime + 2 and retroPeak == True:
+            FSF_ori_Y.fsf_setpoint[0] = 0
+            FSF_ori_Z.fsf_setpoint[0] = 0
 
         FSF_ori_Y.compute(0, rocket.rotation_euler.y, PIDDelay)
         FSF_ori_Z.compute(0, rocket.rotation_euler.z, PIDDelay)
@@ -410,9 +449,9 @@ while time < simTime:
         rocket.dataLogger.recordVariable("actuator_output_y_pitch_d", -PID_ori_Y.derivitive)
         rocket.dataLogger.recordVariable("actuator_output_z_yaw_d", -PID_ori_Z.derivitive)
 
-        rocket.dataLogger.recordVariable("ori_x_roll_setpoint", setpoint.x)
-        rocket.dataLogger.recordVariable("ori_y_pitch_setpoint", setpoint.y)
-        rocket.dataLogger.recordVariable("ori_z_yaw_setpoint", setpoint.z)
+        rocket.dataLogger.recordVariable("ori_x_roll_setpoint", setpoint.x * RAD_TO_DEG)
+        rocket.dataLogger.recordVariable("ori_y_pitch_setpoint", setpoint.y * RAD_TO_DEG)
+        rocket.dataLogger.recordVariable("ori_z_yaw_setpoint", setpoint.z * RAD_TO_DEG)
 
         rocket.dataLogger.recordVariable("ori_x_roll_velocity", rocket.rotationalVelocity.x * RAD_TO_DEG)
         rocket.dataLogger.recordVariable("ori_y_pitch_velocity", rocket.rotationalVelocity.y * RAD_TO_DEG)
