@@ -12,6 +12,9 @@ def positive_or_negative():
     else:
         return -1
 
+def LPF(new, old, gain):
+    return new*(1-gain) + old*gain
+
 class PID:
     def __init__(self, kP, kI, kD, setpoint, iMax, usePONM):
         
@@ -132,40 +135,190 @@ class FSF:
         self.lastOri = 0
         self.I = 0
 
-class Sensor:
+class NAVController:
 
     def __init__(self):
 
-        self.accelerometerNoise = vector3(0.0, 0.0, 0.0)
-        self.accelerometerOffset = vector3(0.0, 0.0, 0.0)
+        self.accelBias = vector3(0.0, 0.0, 0.0)
 
-        self.gyroscopeNoise = vector3(0.0, 0.0, 0.0)
         self.gyroscopeBias = vector3(0.0, 0.0, 0.0)
 
+        self.barometerAlt = 0.0
+        self.barometerVel = 0.0
+        self.barometerTime = 0.0
+
         self.oriRates = vector3(0.0, 0.0, 0.0)
+        self.oriRatesFiltered = vector3(0.0, 0.0, 0.0)
+        self.lastOriRates = vector3(0.0, 0.0, 0.0)
+
         self.orientation_quat = Quaternion()
         self.orientation_euler = vector3(0.0, 0.0, 0.0)
 
         self.accelerationLocal = vector3(0.0, 0.0, 0.0)
+        self.accelerationLocalFiltered = vector3(0.0, 0.0, 0.0)
+        self.lastAccelerationLocal = vector3(0.0, 0.0, 0.0)
+
         self.accelerationInertial = vector3(0.0, 0.0, 0.0)
+        
         self.velocityInertial = vector3(0.0, 0.0, 0.0)
         self.positionInertial = vector3(0.0, 0.0, 0.0)
 
-    def update(self, acceleration, oriRate, gravity, dt):
+        self.debiasCount = 0
+
+        self.debiased = False
+        self.inFlight = False
+
+    def update(self, acceleration, rotationalVel, gravity, dt, time):
+
+        self.accelerationLocal = acceleration
+        self.oriRates = rotationalVel
+
+        # if self.inFlight == True and self.debiased == True:
+        self.accelerationLocalFiltered = self.accelerationLocal - self.accelBias
+        self.accelerationLocalFiltered = LPF(self.accelerationLocalFiltered, self.lastAccelerationLocal, 0.05)
+
+        self.oriRatesFiltered = self.oriRates - self.gyroscopeBias
+        self.oriRatesFiltered = LPF(self.oriRatesFiltered, self.lastOriRates, 0.05)
         
-        self.oriRates.x = oriRate.x + self.gyroscopeBias.x + ((random.randint(60, 100) / 100) * self.gyroscopeNoise.x * positive_or_negative())
-        self.oriRates.y = oriRate.y + self.gyroscopeBias.y + ((random.randint(60, 100) / 100) * self.gyroscopeNoise.y * positive_or_negative())
-        self.oriRates.z = oriRate.z + self.gyroscopeBias.z + ((random.randint(60, 100) / 100) * self.gyroscopeNoise.z * positive_or_negative())
-        
-        self.orientation_quat.updateOrientation( self.oriRates.x, self.oriRates.y, self.oriRates.z, dt )
+        self.orientation_quat.updateOrientation( self.oriRatesFiltered.x, self.oriRatesFiltered.y, self.oriRatesFiltered.z, dt )
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
 
-        self.accelerationLocal.x = acceleration.x + ((random.randint(60, 100) / 100) * self.accelerometerNoise.x * positive_or_negative())
-        self.accelerationLocal.y = acceleration.y + ((random.randint(60, 100) / 100) * self.accelerometerNoise.y * positive_or_negative())
-        self.accelerationLocal.z = acceleration.z + ((random.randint(60, 100) / 100) * self.accelerometerNoise.z * positive_or_negative())
-
-        self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocal)
+        self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocalFiltered)
         self.accelerationInertial += gravity
 
         self.velocityInertial += self.accelerationInertial * dt
         self.positionInertial += self.velocityInertial * dt
+
+        self.velocityInertial.x = LPF(self.velocityInertial.x, self.barometerVel, 0.05 * (((time - self.barometerTime) / 40) + 1))
+        self.positionInertial.x = LPF(self.positionInertial.x, self.barometerAlt, 0.05 * (((time - self.barometerTime) / 40) + 1))
+
+        if self.positionInertial.x <= 0:
+            self.positionInertial.x = 0
+            self.velocityInertial.x = 0
+        # else:
+        #     self.accelerationLocalFiltered = self.accelerationLocal
+        #     self.oriRatesFiltered = self.oriRates
+    
+    def accelOri(self, accel):
+        self.orientation_euler.y = np.arctan2(accel.y, accel.z)
+        self.orientation_euler.z = np.arctan2(accel.z, accel.y)
+        self.orientation_quat = self.orientation_quat.eulerToQuaternion(self.orientation_euler.x, self.orientation_euler.y, self.orientation_euler.z)
+
+    def passBarometerData(self, barometerAlt, barometerVel, time):
+        self.barometerAlt = barometerAlt
+        self.barometerVel = barometerVel
+        self.barometerTime = time
+    
+    def measureDebias(self, acceleration, rotationalVel):
+        if self.inFlight == False and self.debiased == False:
+            self.debiasCount += 1
+            self.accelBias += acceleration
+            self.gyroscopeBias += rotationalVel
+
+    def debias(self):
+        if self.debiased == False:
+            self.accelBias /= self.debiasCount
+            self.gyroscopeBias /= self.debiasCount
+            self.debiased = True
+
+class barometer:
+
+    def __init__(self):
+        self.altitude = 0.0
+        self.noise = 0.0
+        self.lastRead = 0.0
+        self.lastAltitude = 0.0
+        self.lastVelocity = 0.0
+        self.velocity = 0.0
+        self.readDelay = 0.0
+        self.pressureEventOffset = 0.0
+        self.timeSincePressureEvent = 0.0
+    
+    def read(self, altitude, time):
+        if time > self.lastRead + self.readDelay:
+            if self.pressureEventOffset > 0:
+                self.pressureEventOffset -= self.pressureEventOffset * 0.5 * (time - self.lastRead)
+            self.altitude = altitude + ((random.randint(0, 100) / 100) * self.noise * positive_or_negative())
+            self.velocity = (self.altitude - self.lastAltitude) / (time - self.lastRead)
+            self.lastRead = time
+            self.lastAltitude = self.altitude
+            self.lastVelocity = self.velocity
+    
+    def pressureEvent(self, effect, time):
+        self.pressureEventOffset = effect
+        self.timeSincePressureEvent = time
+
+class IMU6DOF:
+
+    def __init__(self):
+        
+        self.accel = vector3(0.0, 0.0, 0.0)
+        self.oriRates = vector3(0.0, 0.0, 0.0)
+        
+        self.gyroBias = vector3(0.0, 0.0, 0.0)
+        self.accelBias = vector3(0.0, 0.0, 0.0)
+        
+        self.accelScale = vector3(0.0, 0.0, 0.0)
+        self.gyroScale = vector3(0.0, 0.0, 0.0)
+        
+        self.gyroNoise = vector3(0.0, 0.0, 0.0)
+        self.accelNoise = vector3(0.0, 0.0, 0.0)
+        
+        self.sampleRateAccel = 0.0
+        self.sampleRateGyro = 0.0
+
+        self.lastReadAccel = 0.0
+        self.lastReadGyro = 0.0
+
+    def readAccel(self, trueAccelerations, time):
+
+        if time > self.lastReadAccel + self.sampleRateAccel:
+            
+            self.lastReadAccel = time
+
+            self.accel.x = trueAccelerations.x + ((random.randint(0, 100) / 100) * self.accelNoise.x * positive_or_negative())
+            self.accel.y = trueAccelerations.y + ((random.randint(0, 100) / 100) * self.accelNoise.y * positive_or_negative())
+            self.accel.z = trueAccelerations.z + ((random.randint(0, 100) / 100) * self.accelNoise.z * positive_or_negative())
+
+            self.accel += self.accelBias
+
+            if self.accel.x > self.accelScale.x:
+                self.accel.x = self.accelScale.x
+            if self.accel.x < -self.accelScale.x:
+                self.accel.x = -self.accelScale.x
+            if self.accel.y > self.accelScale.y:
+                self.accel.y = self.accelScale.y
+            if self.accel.y < -self.accelScale.y:
+                self.accel.y = -self.accelScale.y
+            if self.accel.z > self.accelScale.z:
+                self.accel.z = self.accelScale.z
+            if self.accel.z < -self.accelScale.z:
+                self.accel.z = -self.accelScale.z
+
+    def readGyro(self, trueOriRates, time):
+
+        if time > self.lastReadAccel + self.sampleRateGyro:
+
+            self.lastReadGyro = time
+
+            self.oriRates.x = trueOriRates.x + ((random.randint(80, 100) / 100) * self.gyroNoise.x * positive_or_negative())
+            self.oriRates.y = trueOriRates.y + ((random.randint(80, 100) / 100) * self.gyroNoise.y * positive_or_negative())
+            self.oriRates.z = trueOriRates.z + ((random.randint(80, 100) / 100) * self.gyroNoise.z * positive_or_negative())
+
+            self.oriRates += self.gyroBias
+
+            if self.oriRates.x > self.gyroScale.x:
+                self.oriRates.x = self.gyroScale.x
+            if self.oriRates.x < -self.gyroScale.x:
+                self.oriRates.x = -self.gyroScale.x
+
+            if self.oriRates.y > self.gyroScale.y:
+                self.oriRates.y = self.gyroScale.y
+            if self.oriRates.y < -self.gyroScale.y:
+                self.oriRates.y = -self.gyroScale.y
+
+            if self.oriRates.z > self.gyroScale.z:
+                self.oriRates.z = self.gyroScale.z
+            if self.oriRates.z < -self.gyroScale.z:
+                self.oriRates.z = -self.gyroScale.z
+        
