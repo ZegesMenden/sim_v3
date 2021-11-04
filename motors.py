@@ -370,6 +370,7 @@ class rocketMotor:
                 else:
                     self.currentThrust = 0.0
 
+
         self.lastTime = time
 
     def throttle(self, percent):
