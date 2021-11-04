@@ -60,6 +60,7 @@ class DOF6:
             self.rotationalVelocity = vector3(0.0, 0.0, 0.0)
             self.positionInertial = vector3(0.0, self.positionInertial.y, self.positionInertial.z)
 
+    def clear(self):
         self.rotationalAcceleration = vector3(0.0, 0.0, 0.0)
         self.accelerationInertial = vector3(0.0, 0.0, 0.0)
         self.accelerationLocal = vector3(0.0, 0.0, 0.0)
