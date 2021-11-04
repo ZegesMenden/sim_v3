@@ -276,6 +276,9 @@ class TVC:
         self.positionY = 0.0
         self.positionZ = 0.0
 
+        self.ServopositionY = 0.0
+        self.ServopositionZ = 0.0
+
         self.minY = 0.0
         self.maxY = 0.0
 
@@ -300,22 +303,43 @@ class TVC:
 
     def actuate(self, command_angles, dt):
 
-        self.commandY = command_angles.y
-        self.commandZ = command_angles.z
+        # self.commandY = command_angles.y
+        # self.commandZ = command_angles.z
 
-        errorY = self.commandY - self.positionY
-        errorZ = self.commandZ - self.positionZ
+        # errorY = self.commandY - self.positionY
+        # errorZ = self.commandZ - self.positionZ
 
-        speedY = self.servoSpeed * dt / self.linkageRatioY
-        speedZ = self.servoSpeed * dt / self.linkageRatioZ
+        # speedY = self.servoSpeed * dt / self.linkageRatioY
+        # speedZ = self.servoSpeed * dt / self.linkageRatioZ
+
+        # errorY = clamp(errorY, -speedY, speedY)
+        # errorZ = clamp(errorZ, -speedZ, speedZ)
+        
+        # self.positionX = 0.0
+        # self.positionY += (errorY + (random.randint(-100, 100) / 100) * self.noiseY) * DEG_TO_RAD
+        # self.positionZ += (errorZ + (random.randint(-100, 100) / 100) * self.noiseZ) * DEG_TO_RAD
+        
+        # self.positionY = clamp(self.positionY, self.minY * DEG_TO_RAD, self.maxY * DEG_TO_RAD)
+        # self.positionZ = clamp(self.positionZ, self.minZ * DEG_TO_RAD, self.maxZ * DEG_TO_RAD)
+
+        self.commandY = command_angles.y * RAD_TO_DEG * self.linkageRatioY
+        self.commandZ = command_angles.z * RAD_TO_DEG * self.linkageRatioZ
+
+        errorY = self.commandY - self.ServopositionY
+        errorZ = self.commandZ - self.ServopositionZ
+
+        speedY = self.servoSpeed * dt
+        speedZ = self.servoSpeed * dt
 
         errorY = clamp(errorY, -speedY, speedY)
         errorZ = clamp(errorZ, -speedZ, speedZ)
-        
-        self.positionX = 0.0
-        self.positionY += (errorY + (random.randint(-100, 100) / 100) * self.noiseY) * DEG_TO_RAD
-        self.positionZ += (errorZ + (random.randint(-100, 100) / 100) * self.noiseZ) * DEG_TO_RAD
-        
+
+        self.ServopositionY += errorY
+        self.ServopositionZ += errorZ
+
+        self.positionY = ( round(self.ServopositionY, 0) / self.linkageRatioY + random.randint(-100, 100) / 100 * self.noiseY) * DEG_TO_RAD
+        self.positionZ = ( round(self.ServopositionZ, 0) / self.linkageRatioZ + random.randint(-100, 100) / 100 * self.noiseZ) * DEG_TO_RAD
+
         self.positionY = clamp(self.positionY, self.minY * DEG_TO_RAD, self.maxY * DEG_TO_RAD)
         self.positionZ = clamp(self.positionZ, self.minZ * DEG_TO_RAD, self.maxZ * DEG_TO_RAD)
 
