@@ -101,6 +101,14 @@ rocket.dataLogger.addDataPoint("z_velocity_sensed")
 rocket.dataLogger.addDataPoint("resultant_velocity")
 rocket.dataLogger.addDataPoint("resultant_velocity_sensed")
 
+rocket.dataLogger.addDataPoint("prograde_direction_x_roll")
+rocket.dataLogger.addDataPoint("prograde_direction_y_pitch")
+rocket.dataLogger.addDataPoint("prograde_direction_z_yaw")
+
+rocket.dataLogger.addDataPoint("retrograde_direction_x_roll")
+rocket.dataLogger.addDataPoint("retrograde_direction_y_pitch")
+rocket.dataLogger.addDataPoint("retrograde_direction_z_yaw")
+
 rocket.dataLogger.addDataPoint("x_acceleration")
 rocket.dataLogger.addDataPoint("y_acceleration")
 rocket.dataLogger.addDataPoint("z_acceleration")
@@ -145,16 +153,16 @@ rocket.dataLogger.initCSV(True, True)
 
 apogee = False
 
-rocket.dryMass = 0.85
+rocket.dryMass = 0.95
 motor = rocketMotor(1000)
 
-motor.add_motor(motorType.e12, "ascent")
-# motor.add_motor(motorType.e12, "landing")
+motor.add_motor(motorType.f15, "ascent")
+motor.add_motor(motorType.f15, "landing")
 
 rocket.mass = rocket.dryMass + motor.totalMotorMass
 
-rocket.mmoi = vector3(0.0602, 0.0404203354, 0.0404203354)
-rocket.rotation_euler = vector3(0, random.randint(-100, 100) / 50 * DEG_TO_RAD, random.randint(-100, 100) / 50 * DEG_TO_RAD)
+rocket.mmoi = vector3(0.0102, 0.0404203354, 0.0404203354)
+rocket.rotation_euler = vector3(0, random.randint(-100, 100) / 100 * DEG_TO_RAD, random.randint(-100, 100) / 100 * DEG_TO_RAD)
 rocket.rotaiton_quaternion = Quaternion().eulerToQuaternion(rocket.rotation_euler.x, rocket.rotation_euler.y, rocket.rotation_euler.z)
 rocket.gravity = vector3(-9.83, 0.0, 0.0)
 
@@ -165,24 +173,31 @@ ori_setpoint = flightPath()
 ori_setpoint.loadFlightPath('flightPath.csv')
 
 maxPosition = 0.0
-
+global setpoint
 setpoint = vector3(0.0, 0.0, 0.0)
 
 PID_ori_X = PID(0, 0, 0, 0, 0, False)
 PID_ori_Y = PID(1.8, 0.2, 0.4, 0, 2, False)
 PID_ori_Z = PID(1.8, 0.2, 0.4, 0, 2, False)
 
-PID_position_Y = PID(4, 0, 1, 0, 0, False)
-PID_position_Z = PID(4, 0, 1, 0, 0, False)
+PID_position_Y = PID(4, 0, 0.25, 0, 0, False)
+PID_position_Z = PID(4, 0, 0.25, 0, 0, False)
 
-fsf_gains_Y = np.matrix([10.32050808, 5.83390801, 0, 0])
-fsf_setpoint_Y = np.array([0.0, 0.0, 0, 0.0])
+fsf_gains_X = np.matrix([22.36, 5.24])
+fsf_setpoint_X = np.array([0.0, 0.0])
 
-fsf_gains_Z = np.matrix([10.32050808, 5.83390801, 0, 0])
-fsf_setpoint_Z = np.array([0.0, 0.0, 0, 0.0])
+fsf_gains_Y = np.matrix([22.36, 5.24])
+fsf_setpoint_Y = np.array([0.0, 0.0])
 
-FSF_ori_Y = FSF(fsf_gains_Y, fsf_setpoint_Y, 0)
-FSF_ori_Z = FSF(fsf_gains_Z, fsf_setpoint_Z, 0)
+fsf_gains_Z = np.matrix([22.36, 5.24])
+fsf_setpoint_Z = np.array([0.0, 0.0])
+
+FSF_ori_X = FSF_ori(fsf_gains_X, fsf_setpoint_X, 0)
+FSF_ori_Y = FSF_ori(fsf_gains_Y, fsf_setpoint_Y, 0)
+FSF_ori_Z = FSF_ori(fsf_gains_Z, fsf_setpoint_Z, 0)
+
+fsf_test_z = FSF_ori_test(22.36, 5.24)
+fsf_test_y = FSF_ori_test(22.36, 5.24)
 
 rocket_TVC = TVC()
 
@@ -190,22 +205,26 @@ rocket_TVC.lever = 0.24
 rocket_TVC.linkageRatioZ = 10
 rocket_TVC.linkageRatioY = 10
 
-rocket_TVC.noiseY = 0.3 * DEG_TO_RAD
-rocket_TVC.noiseZ = 0.3 * DEG_TO_RAD
+rocket_TVC.noiseY = 0.2 * DEG_TO_RAD
+rocket_TVC.noiseZ = 0.2 * DEG_TO_RAD
 
-rocket_TVC.servoSpeed = 50
+rocket_TVC.servoSpeed = 200
 
-rocket_TVC.maxY = 5
-rocket_TVC.maxZ = 5
-rocket_TVC.minY = -5
-rocket_TVC.minZ = -5
+rocket_TVC.maxY = 3
+rocket_TVC.maxZ = 3
+rocket_TVC.minY = -3
+rocket_TVC.minZ = -3
 
 TVC_derolled = vector3( 0.0, 0.0, 0.0 )
 
-tvc_y = random.randint(-100, 100) / 100 * DEG_TO_RAD
-tvc_z = random.randint(-100, 100) / 100 * DEG_TO_RAD
+rocket_TVC.positionY = random.randint(-100, 100) / 1000 * DEG_TO_RAD
+rocket_TVC.positionZ = random.randint(-100, 100) / 1000 * DEG_TO_RAD
+
+rocket_TVC.offsetY = random.randint(-100, 100) / 1000 * DEG_TO_RAD
+rocket_TVC.offsetZ = random.randint(-100, 100) / 1000 * DEG_TO_RAD
 
 time = 0.0
+missionTime = 0.0
 timeStep = 1000
 simTime = 90
 
@@ -233,17 +252,17 @@ NAV = NAVController()
 IMU = IMU6DOF()
 baro = barometer()
 
-baro.readDelay = 1 / 20
+baro.readDelay = 1 / 40
 IMU.sampleRateAccel = 1 / 500
 IMU.sampleRateGyro = 1 / 500
 
 baro.noise = 0.005
 
-IMU.gyroBias = vector3((random.randint(80, 100) / 100 ) * positive_or_negative() * DEG_TO_RAD, (random.randint(80, 100) / 100 ) * positive_or_negative() * DEG_TO_RAD, (random.randint(80, 100) / 100) * positive_or_negative() * DEG_TO_RAD)
-IMU.accelBias = vector3(random.randint(80, 100)/100 * positive_or_negative(), random.randint(80, 100)/100 * positive_or_negative(), random.randint(80, 100)/100 * positive_or_negative())
+IMU.gyroBias = vector3(np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD)
+IMU.accelBias = vector3(np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0])
 
-IMU.gyroNoise = vector3((random.randint(80, 100) / 100) * DEG_TO_RAD, (random.randint(80, 100) / 100) * DEG_TO_RAD, (random.randint(80, 100) / 100) * DEG_TO_RAD)
-IMU.accelNoise = vector3(random.randint(80, 100) / 500, random.randint(80, 100) / 500, random.randint(80, 100) / 500)
+IMU.gyroNoise = abs(vector3(np.random.normal(0.2, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.2, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.2, 0.1, 1)[0] * DEG_TO_RAD))
+IMU.accelNoise = abs(vector3(np.random.normal(0.3, 0.2, 1)[0], np.random.normal(0.3, 0.2, 1)[0], np.random.normal(0.3, 0.2, 1)[0]))
 
 IMU.gyroScale = vector3(500 * DEG_TO_RAD, 500 * DEG_TO_RAD, 500 * DEG_TO_RAD)
 IMU.accelScale = vector3(40, 40, 40)
@@ -251,10 +270,20 @@ IMU.accelScale = vector3(40, 40, 40)
 TVC_command = vector3(0.0, 0.0, 0.0)
 
 controlVelocity = False
-followSetpoint = False
+followSetpoint = True
 
 NAV.orientation_euler = rocket.rotation_euler
 NAV.orientation_quat = rocket.rotaiton_quaternion
+
+# user defined functions and variables
+global apogee_sensed
+apogee_sensed = 0.0
+light_alt = 0.0
+
+dv_estimate = 7.5
+dv_actual = 0.0
+vel_burn_start = 0.0
+throttle = 0.0
 
 def readSensors(time, dt):
     
@@ -276,6 +305,7 @@ def readSensors(time, dt):
         NAV.passBarometerData(baro.altitude, baro.velocity, time)
 
 def logCSV():
+    global setpoint
     rocket.dataLogger.recordVariable("time", time)
     rocket.dataLogger.recordVariable("ori_x_roll", rocket.rotation_euler.x * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_y_pitch", rocket.rotation_euler.y * RAD_TO_DEG)
@@ -327,6 +357,10 @@ def logCSV():
 
     rocket.dataLogger.recordVariable("resultant_velocity", rocket.velocityInertial.len())
     rocket.dataLogger.recordVariable("resultant_velocity_sensed", NAV.velocityInertial.len())
+    
+    rocket.dataLogger.recordVariable("prograde_direction_x_roll", rocket.velocityInertial.dir().x * RAD_TO_DEG)
+    rocket.dataLogger.recordVariable("prograde_direction_y_pitch", rocket.velocityInertial.dir().y * RAD_TO_DEG)
+    rocket.dataLogger.recordVariable("prograde_direction_z_yaw", rocket.velocityInertial.dir().z * RAD_TO_DEG)
 
     rocket.dataLogger.recordVariable("x_acceleration", rocket.accelerationLocal.x)
     rocket.dataLogger.recordVariable("y_acceleration", rocket.accelerationLocal.y)
@@ -359,35 +393,83 @@ def logCSV():
 
     rocket.dataLogger.saveData(False)
 
+global burnAlt
+burnAlt = 0.0
 def controlLoop():
+    global apogee_sensed
+    global burnAlt
+    global setpoint
+    if NAV.velocityInertial.x < 0 and apogee_sensed == 0.0:
+        rocket.mass -= 0.025
+        burnAlt = 0.68 * NAV.positionInertial.x
+        apogee_sensed = NAV.positionInertial.x
 
-    if followSetpoint == True:
+    if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt:
+        motor.ignite("landing", time)
 
-        setpoint = vector3(0, 0, 0)
+    setpoint = vector3(0, 0, 0)
+    # print(round(rocket.velocityInertial.dir() * RAD_TO_DEG, 2))
+
+    if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt and NAV.velocityInertial.x < -1:
+        pgrad = NAV.velocityInertial.dir()
+        if pgrad.z > 0:
+            pgrad.z -= 180 * DEG_TO_RAD
+        else:
+            pgrad.z += 180 * DEG_TO_RAD
+        if pgrad.y > 0:
+            pgrad.y -= 180 * DEG_TO_RAD
+        else:
+            pgrad.y += 180 * DEG_TO_RAD
+        pgrad.y *= -1
+        setpoint = pgrad
+        # setpoint = vector3(0.0, 0.0, 0.0)
+    else:
+        setpoint = vector3(0.0, 0.0, 0.0)
+
+    if followSetpoint == True and missionTime < 3:
 
         if controlVelocity == False:
-            ori_setpoint.getCurrentSetpoint(time)
-            setpoint = NAV.orientation_quat.rotateVector(ori_setpoint.currentSetpoint() * DEG_TO_RAD)
+            ori_setpoint.getCurrentSetpoint(missionTime)
+            setpoint = ori_setpoint.currentSetpoint
+            setpoint = NAV.orientation_quat.rotateVector(setpoint * DEG_TO_RAD)
 
         else:
+
+            ori_setpoint.getCurrentSetpoint(missionTime)
+
+            PID_position_Y.setPoint = ori_setpoint.currentSetpoint.y
+            PID_position_Z.setPoint = ori_setpoint.currentSetpoint.z
+
             PID_position_Y.compute(NAV.velocityInertial.y, controlDelay)
             PID_position_Z.compute(NAV.velocityInertial.z, controlDelay)
 
             setpoint.y = getAngleFromDesiredAcceleration(PID_position_Y.output, IMU.accel.x)
-            setpoint.z = getAngleFromDesiredAcceleration(PID_position_Z.output, IMU.accel.x)            
+            setpoint.z = getAngleFromDesiredAcceleration(PID_position_Z.output, IMU.accel.x)  
+
+            setpoint.y = clamp(setpoint.y, -0.25, 0.25)
+            setpoint.z = clamp(setpoint.z, -0.25, 0.25)          
             
             setpoint = NAV.orientation_quat.rotateVector(setpoint)
-    else:
-        setpoint = vector3(0, 0, 0)
+    # else:
+    #     setpoint = vector3(0.0, 0.0, 0.0)
+
+    # FSF_ori_Y.fsf_setpoint[0] = setpoint.y
+    # FSF_ori_Z.fsf_setpoint[0] = setpoint.z
+
+    fsf_test_z.setpoint = setpoint.z
+    fsf_test_y.setpoint = setpoint.y
+
+    # FSF_ori_Y.compute(NAV.orientation_euler.y, controlDelay)
+    # FSF_ori_Z.compute(NAV.orientation_euler.z, controlDelay)
+
+    fsf_test_y.compute(NAV.orientation_euler.y, NAV.oriRates.y)
+    fsf_test_z.compute(NAV.orientation_euler.z, NAV.oriRates.z)
+
+    # TVC_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, NAV.accelerationLocalFiltered.x, rocket.mmoi.y, FSF_ori_Y.output)
+    # TVC_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, NAV.accelerationLocalFiltered.x, rocket.mmoi.z, FSF_ori_Z.output)
     
-    FSF_ori_Y.fsf_setpoint[0] = setpoint.y
-    FSF_ori_Z.fsf_setpoint[0] = setpoint.z
-
-    FSF_ori_Y.compute(0, NAV.orientation_euler.y, controlDelay)
-    FSF_ori_Z.compute(0, NAV.orientation_euler.z, controlDelay)
-
-    TVC_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, NAV.accelerationLocalFiltered.x, rocket.mmoi.y, FSF_ori_Y.output)
-    TVC_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, NAV.accelerationLocalFiltered.x, rocket.mmoi.z, FSF_ori_Z.output)
+    TVC_y = calculateAngleFromDesiredTorque(rocket_TVC.lever, NAV.accelerationLocalFiltered.x, rocket.mmoi.y, fsf_test_y.getOutput())
+    TVC_z = calculateAngleFromDesiredTorque(rocket_TVC.lever, NAV.accelerationLocalFiltered.x, rocket.mmoi.z, fsf_test_z.getOutput())
     
     rotated_tvc = rotate(TVC_y, TVC_z, NAV.orientation_euler.x)
     return vector3(0.0, rotated_tvc.x, rotated_tvc.y)
@@ -395,17 +477,24 @@ def controlLoop():
 while time < simTime:
     time += dt
 
+    if rocket.positionInertial.x > 0.01:
+        missionTime += dt
+
     motor.update(time)
     rocket_TVC.calculateForces(motor.currentThrust)
 
     rocket.mass = rocket.dryMass + motor.totalMotorMass
 
+    # rocket.addTorque(vector3(0.0, np.sin(time/2)*5,np.sin(time/2)*5) * dt)
     rocket.addForce(rocket_TVC.acceleration)
     rocket.addTorque(rocket_TVC.torque)
     rocket.addTorque(rocket.rotationalVelocity * -0.05)
     rocket.addForce(vector3(rocket.velocityInertial.x * -0.025, rocket.velocityInertial.z * -0.025, rocket.velocityInertial.z * -0.025))
 
-    rocket_TVC.actuate(TVC_command, dt)
+    if NAV.accelerationLocal.x > 2:
+        rocket_TVC.actuate(TVC_command, dt)
+    else:
+        rocket_TVC.actuate(vector3(0.0, 0.0, 0.0), dt)
 
     if time > lastControl + controlDelay and NAV.positionInertial.x > 0.1:
         TVC_command = controlLoop()
@@ -435,7 +524,7 @@ while time < simTime:
         apogee = True
         apogee_actual = rocket.positionInertial.x
 
-    if rocket.positionInertial.x <= 0.01 and apogee == True:
+    if rocket.positionInertial.x <= 0.05 and apogee == True:
         break
 
 print(f'''
@@ -470,22 +559,49 @@ print(f'''
 {bcolors.OKBLUE}y sensed: {bcolors.FAIL}{round(NAV.oriRates.y * RAD_DEG, 2)} deg/s {bcolors.OKBLUE}-  y actual: {bcolors.FAIL}{round(rocket.rotationalVelocity.y * RAD_DEG, 2)} deg/s
 {bcolors.OKBLUE}z sensed: {bcolors.FAIL}{round(NAV.oriRates.z * RAD_DEG, 2)} deg/s {bcolors.OKBLUE}-  z actual: {bcolors.FAIL}{round(rocket.rotationalVelocity.z * RAD_DEG, 2)} deg/s
 
+{bcolors.WARNING}gyro noise:
+{bcolors.OKBLUE}x: {bcolors.FAIL}{round(IMU.gyroNoise.x * RAD_TO_DEG, 2)} deg/s - {bcolors.OKBLUE}y: {bcolors.FAIL}{round(IMU.gyroNoise.y * RAD_TO_DEG, 2)} deg/s - {bcolors.OKBLUE}z: {bcolors.FAIL}{round(IMU.gyroNoise.z * RAD_TO_DEG, 2)} deg/s
+
+{bcolors.WARNING}accel noise:
+{bcolors.OKBLUE}x: {bcolors.FAIL}{round(IMU.accelNoise.x, 2)} m/s - {bcolors.OKBLUE}y: {bcolors.FAIL}{round(IMU.accelNoise.y, 2)} m/s - {bcolors.OKBLUE}z: {bcolors.FAIL}{round(IMU.accelNoise.z, 2)} m/s
+
+{bcolors.WARNING}gyro bias:
+{bcolors.OKBLUE}x: {bcolors.FAIL}{round(IMU.gyroBias.x * RAD_TO_DEG, 2)} deg/s - {bcolors.OKBLUE}y: {bcolors.FAIL}{round(IMU.gyroBias.y * RAD_TO_DEG, 2)} deg/s - {bcolors.OKBLUE}z: {bcolors.FAIL}{round(IMU.gyroBias.z * RAD_TO_DEG, 2)} deg/s
+
+{bcolors.WARNING}accel bias:
+{bcolors.OKBLUE}x: {bcolors.FAIL}{round(IMU.accelBias.x, 2)} m/s - {bcolors.OKBLUE}y: {bcolors.FAIL}{round(IMU.accelBias.y, 2)} m/s - {bcolors.OKBLUE}z: {bcolors.FAIL}{round(IMU.accelBias.z, 2)} m/s
+
+{bcolors.WARNING}gyro debias:
+{bcolors.OKBLUE}x: {bcolors.FAIL}{round(NAV.gyroscopeBias.x * RAD_TO_DEG, 2)} deg/s - {bcolors.OKBLUE}y: {bcolors.FAIL}{round(NAV.gyroscopeBias.y * RAD_TO_DEG, 2)} deg/s - {bcolors.OKBLUE}z: {bcolors.FAIL}{round(NAV.gyroscopeBias.z * RAD_TO_DEG, 2)} deg/s
+
+{bcolors.WARNING}accel debias:
+{bcolors.OKBLUE}x: {bcolors.FAIL}{round(NAV.accelBias.x, 2)} m/s - {bcolors.OKBLUE}y: {bcolors.FAIL}{round(NAV.accelBias.y, 2)} m/s - {bcolors.OKBLUE}z: {bcolors.FAIL}{round(NAV.accelBias.z, 2)} m/s
+
 {bcolors.WARNING}------------------------------------------------------
 {bcolors.ENDC}''')
 
+if abs(rocket.positionInertial.y) < 1.5 and abs(rocket.positionInertial.z) > 3 and abs(rocket.positionInertial.z) < 5:
+    if abs(rocket.velocityInertial.y) < 0.5 and abs(rocket.velocityInertial.z) < 0.5 and abs(rocket.velocityInertial.x) < 7:
+        if abs(rocket.rotation_euler.y) < 5 * DEG_TO_RAD and abs(rocket.rotation_euler.z) < 5 * DEG_TO_RAD:
+
+            print(f'''{bcolors.WARNING}------------------------------------------------------
+{bcolors.OKBLUE}Rocket landed successfully!''')
+
 inp = input(f'{bcolors.OKBLUE}show graphs?{bcolors.WARNING}\n')
 
-if inp.upper() == "Y":
+if "Y" in inp.upper():
     
     ori_plot_points = ['time', 
     'ori_x_roll', 'ori_y_pitch', 'ori_z_yaw', 
     'ori_x_roll_sensed', 'ori_y_pitch_sensed', 'ori_z_yaw_sensed', 
-    'actuator_output_y_pitch', 'actuator_output_z_yaw']
+    'actuator_output_y_pitch', 'actuator_output_z_yaw',
+    'ori_x_roll_setpoint', 'ori_y_pitch_setpoint', 'ori_z_yaw_setpoint']
+    # 'prograde_direction_x_roll', 'prograde_direction_y_pitch', 'prograde_direction_z_yaw']
 
     oriRate_plot_points = ['time', 
-    'ori_x_roll_velocity', 'ori_y_roll_velocity', 'ori_z_roll_velocity', 
-    'ori_x_roll_velocity_sensed', 'ori_y_roll_velocity_sensed', 'ori_z_roll_velocity_sensed', 
-    'ori_x_roll_velocity_sensed_filtered', 'ori_y_roll_velocity_sensed_filtered', 'ori_z_roll_velocity_sensed_filtered']
+    'ori_x_roll_velocity', 'ori_y_pitch_velocity', 'ori_z_yaw_velocity', 
+    'ori_x_roll_velocity_sensed', 'ori_y_pitch_velocity_sensed', 'ori_z_yaw_velocity_sensed', 
+    'ori_x_roll_velocity_sensed_filtered', 'ori_y_pitch_velocity_sensed_filtered', 'ori_z_yaw_velocity_sensed_filtered']
 
     pos_plot_points = ['time', 
     'x_position', 'y_position', 'z_position', 
@@ -505,7 +621,7 @@ if inp.upper() == "Y":
     plot_position = plotter.graph_from_csv(pos_plot_points)
     plot_velocity = plotter.graph_from_csv(vel_plot_points)
     plot_accel = plotter.graph_from_csv(accel_plot_points)
-
+    plot_all = plotter.graph_from_csv(data_list)
     
     # 3d position graph
 
@@ -558,15 +674,15 @@ if inp.upper() == "Y":
     plt.ylabel("various readings m/s2")
 
     
-    # plt.figure(6)
+    plt.figure(6)
 
-    # for index, dataPoint in enumerate(plot_oriRates):
-    #     if index > 0:
-    #         plt.plot(plot_oriRates[0], dataPoint, label=oriRate_plot_points[index])
-    # plt.legend()
-    # plt.xlabel("time")
-    # plt.ylabel("various readings deg/s")
+    for index, dataPoint in enumerate(plot_oriRates):
+        if index > 0:
+            plt.plot(plot_oriRates[0], dataPoint, label=oriRate_plot_points[index])
+    plt.legend()
+    plt.xlabel("time")
+    plt.ylabel("various readings deg/s")
 
-    # plt.show()
+    plt.show()
 
 print(f'{bcolors.ENDC}')

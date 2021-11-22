@@ -24,6 +24,15 @@ class test_vector_math(unittest.TestCase):
     def test_len(self):
         self.assertEqual( vector3(5.0, 5.0, 5.0).len(), 8.660254037844387 )
 
+    def test_abs(self):
+        self.assertEqual( vector3(1.0, 1.0, 1.0), abs(vector3(-1.0, -1.0, -1.0)))
+    
+    def test_round(self):
+        self.assertEqual( vector3(1.1, 1.1, 1.1), round(vector3(1.11, 1.11, 1.11), 1))
+
+    def test_str(self):
+        self.assertEqual( "1.0, 1.0, 1.0", str(vector3(1.0, 1.0, 1.0)) )
+
 class test_quaternion_math(unittest.TestCase):
 
     def test_eq(self):

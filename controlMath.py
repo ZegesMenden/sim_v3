@@ -94,7 +94,7 @@ class PID:
         else:
             self.output = self.proportional + self.integral - self.derivitive
 
-class FSF:
+class FSF_oriPos:
     #gains
     # fsf_gains = np.matrix([0,0,0,0])
 
@@ -134,6 +134,50 @@ class FSF:
         self.lastPos = 0
         self.lastOri = 0
         self.I = 0
+
+class FSF_ori:
+    lastOri = 0
+    I = 0
+    output = 0
+
+    def __init__(self, _gains, _setpoint, iGain):
+        self.fsf_gains = _gains
+        self.fsf_setpoint = _setpoint
+        self.iGain = iGain
+
+    def compute(self, ori, dt):
+        x = np.matrix([
+            [ori - self.fsf_setpoint[0]],
+            [((ori - self.lastOri) / dt) - self.fsf_setpoint[1]]])
+        out = -self.fsf_gains * x
+        self.output = np.sum(out)
+        self.I += self.output * self.iGain
+        self.lastOri = ori
+        self.output += self.I
+    
+    def setSetpoint(self, ori, oriRate):
+        self.fsf_gains = np.array([ori, oriRate])
+    
+    def reset(self):
+        self.output = 0
+        self.lastOri = 0
+        self.I = 0
+
+class FSF_ori_test:
+
+    def __init__(self, gain_a, gain_b):
+        self.gain_a = gain_a
+        self.gain_b = gain_b
+        self.setpoint = 0.0
+        self.out = 0.0
+        self.lastOri = 0.0
+
+    def compute(self, ori, oriRate):
+        self.output = -self.gain_a * (ori - self.setpoint)
+        self.output += -self.gain_b * oriRate
+        self.lastOri = ori
+    def getOutput(self):
+        return self.output
 
 class NAVController:
 
@@ -175,10 +219,11 @@ class NAVController:
 
         # if self.inFlight == True and self.debiased == True:
         self.accelerationLocalFiltered = self.accelerationLocal - self.accelBias
-        self.accelerationLocalFiltered = LPF(self.accelerationLocalFiltered, self.lastAccelerationLocal, 0.05)
+        # self.accelerationLocalFiltered = LPF(self.accelerationLocalFiltered, self.lastAccelerationLocal, 0.05)
 
-        self.oriRatesFiltered = self.oriRates - self.gyroscopeBias
-        self.oriRatesFiltered = LPF(self.oriRatesFiltered, self.lastOriRates, 0.05)
+        self.oriRatesFiltered = self.oriRates# - self.gyroscopeBias
+        
+        # self.oriRatesFiltered = LPF(self.oriRatesFiltered, self.lastOriRates, 0.05)
         
         self.orientation_quat.updateOrientation( self.oriRatesFiltered.x, self.oriRatesFiltered.y, self.oriRatesFiltered.z, dt )
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
@@ -276,9 +321,9 @@ class IMU6DOF:
             
             self.lastReadAccel = time
 
-            self.accel.x = trueAccelerations.x + ((random.randint(0, 100) / 100) * self.accelNoise.x * positive_or_negative())
-            self.accel.y = trueAccelerations.y + ((random.randint(0, 100) / 100) * self.accelNoise.y * positive_or_negative())
-            self.accel.z = trueAccelerations.z + ((random.randint(0, 100) / 100) * self.accelNoise.z * positive_or_negative())
+            self.accel.x = np.random.normal(trueAccelerations.x, self.accelNoise.x, 1)[0]
+            self.accel.y = np.random.normal(trueAccelerations.y, self.accelNoise.y, 1)[0]
+            self.accel.z = np.random.normal(trueAccelerations.z, self.accelNoise.z, 1)[0]
 
             self.accel += self.accelBias
 
@@ -297,13 +342,13 @@ class IMU6DOF:
 
     def readGyro(self, trueOriRates, time):
 
-        if time > self.lastReadAccel + self.sampleRateGyro:
+        if time > self.lastReadGyro + self.sampleRateGyro:
 
             self.lastReadGyro = time
 
-            self.oriRates.x = trueOriRates.x + ((random.randint(80, 100) / 100) * self.gyroNoise.x * positive_or_negative())
-            self.oriRates.y = trueOriRates.y + ((random.randint(80, 100) / 100) * self.gyroNoise.y * positive_or_negative())
-            self.oriRates.z = trueOriRates.z + ((random.randint(80, 100) / 100) * self.gyroNoise.z * positive_or_negative())
+            self.oriRates.x = trueOriRates.x + np.random.normal(0, self.gyroNoise.x, 1)[0]
+            self.oriRates.y = trueOriRates.y + np.random.normal(0, self.gyroNoise.y, 1)[0]
+            self.oriRates.z = trueOriRates.z + np.random.normal(0, self.gyroNoise.z, 1)[0]
 
             self.oriRates += self.gyroBias
 

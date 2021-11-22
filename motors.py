@@ -347,7 +347,7 @@ class rocketMotor:
         self.totalMotorMass += 0.025
         self.motorNames.append(str(motorName))
         self.thrustLists[str(motorName)] = interpolateThrust(motor, self.timeStep)
-        self.ignitionDelays[str(motorName)] = random.randint(85, 100) / 100 * self.maxIgnitionDelay
+        self.ignitionDelays[str(motorName)] = random.randint(80, 100) / 100 * self.maxIgnitionDelay
         self.ignitionTimes[str(motorName)] = 0.0
         self.isLit[str(motorName)] = False
 

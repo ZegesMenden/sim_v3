@@ -2,8 +2,6 @@ import numpy as np
 import random
 from math import isclose
 
-from pygame import error
-
 DEG_TO_RAD = np.pi / 180
 RAD_TO_DEG = 180 / np.pi
 
@@ -23,7 +21,7 @@ def rotate(x, y, theta): # Rotates a 2D vector by an angle theta, returns a Vect
 
 class vector3:
 
-    def __init__(self, x, y, z):
+    def __init__(self, x=0.0, y=0.0, z=0.0):
 
         self.x = x
         self.y = y
@@ -81,7 +79,7 @@ class vector3:
         
         if isinstance(vector, vector3):
             
-            if isclose(self.x, vector.x, rel_tol=0.01) and isclose(self.y, vector.y, rel_tol=0.01) and isclose(self.z, vector.z, rel_tol=0.01):
+            if isclose(self.x, vector.x, rel_tol=0.001) and isclose(self.y, vector.y, rel_tol=0.01) and isclose(self.z, vector.z, rel_tol=0.001):
                 return True
 
             else: 
@@ -89,6 +87,14 @@ class vector3:
 
         else:
             return False
+    
+    def __abs__(self):
+
+        return vector3(abs(self.x), abs(self.y), abs(self.z))
+
+    def __round__(self, ammt):
+
+        return vector3(round(self.x, ammt), round(self.y, ammt), round(self.z, ammt))
 
     def norm(self):
 
@@ -103,6 +109,9 @@ class vector3:
     def len(self):
 
         return np.sqrt( self.x ** 2 + self.y ** 2 + self.z ** 2 )
+
+    def dir(self):
+        return vector3(np.arctan2(self.z, self.y), np.arctan2(self.z, self.x), np.arctan2(self.y, self.x))
 
     def degRad(self):
 
@@ -121,7 +130,8 @@ class vector3:
         return self
 
     def __str__(self):
-        return str(self.x) + ',' + str(self.y) + ',' + str(self.z)
+
+        return str(self.x) + ', ' + str(self.y) + ', ' + str(self.z)
     
 class Quaternion:
     
@@ -339,6 +349,9 @@ class TVC:
 
         self.positionY = ( round(self.ServopositionY, 0) / self.linkageRatioY + random.randint(-100, 100) / 100 * self.noiseY) * DEG_TO_RAD
         self.positionZ = ( round(self.ServopositionZ, 0) / self.linkageRatioZ + random.randint(-100, 100) / 100 * self.noiseZ) * DEG_TO_RAD
+
+        self.positionY += self.offsetY
+        self.positionZ += self.offsetZ
 
         self.positionY = clamp(self.positionY, self.minY * DEG_TO_RAD, self.maxY * DEG_TO_RAD)
         self.positionZ = clamp(self.positionZ, self.minZ * DEG_TO_RAD, self.maxZ * DEG_TO_RAD)
