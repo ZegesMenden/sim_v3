@@ -179,6 +179,44 @@ class FSF_ori_test:
     def getOutput(self):
         return self.output
 
+class kalmanFilter:
+
+    def __init__(self):
+
+        self.q = vector3() # process noise
+        self.r = vector3() # sensor noise
+        self.p = vector3() # estimated error
+        self.x = vector3() # state
+
+    def set_gains(self, q, r, p):
+
+        self.q = q
+        self.r = r
+        self.p = p
+
+    def set_initial_value(self, x):
+
+        self.x = x
+
+    def update(self, sensor_reading):
+        self.p += self.q
+        k = self.p / ( self.p + self.r )
+        self.x += k * ( sensor_reading - self.x )
+        self.p = ( vector3(1, 1, 1) - k ) * self.p
+
+    def output(self):
+
+        return self.x
+
+    def sensor_noise(self):
+        return self.r
+
+    def process_noise(self):
+        return self.q
+    
+    def error_estimated(self):
+        return self.p
+
 class NAVController:
 
     def __init__(self):
@@ -212,16 +250,24 @@ class NAVController:
         self.debiased = False
         self.inFlight = False
 
+        self.oriKF = kalmanFilter()
+        self.accelKF = kalmanFilter()
+
     def update(self, acceleration, rotationalVel, gravity, dt, time):
 
-        self.accelerationLocal = acceleration
-        self.oriRates = rotationalVel
+        self.accelerationLocal = acceleration - self.accelBias
+        self.oriRates = rotationalVel - self.gyroscopeBias
+        
+        if self.inFlight == False:
+            self.positionInertial = vector3(0, 0 ,0)
+            self.velocityInertial = vector3(0, 0, 0)
 
-        # if self.inFlight == True and self.debiased == True:
-        self.accelerationLocalFiltered = self.accelerationLocal - self.accelBias
+        self.accelKF.update(self.accelerationLocal)
+        self.accelerationLocalFiltered = self.accelKF.output()
         # self.accelerationLocalFiltered = LPF(self.accelerationLocalFiltered, self.lastAccelerationLocal, 0.05)
 
-        self.oriRatesFiltered = self.oriRates# - self.gyroscopeBias
+        self.oriKF.update(self.oriRates)
+        self.oriRatesFiltered = self.oriKF.output()
         
         # self.oriRatesFiltered = LPF(self.oriRatesFiltered, self.lastOriRates, 0.05)
         
@@ -229,13 +275,17 @@ class NAVController:
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
 
         self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocalFiltered)
+
         self.accelerationInertial += gravity
 
         self.velocityInertial += self.accelerationInertial * dt
         self.positionInertial += self.velocityInertial * dt
 
-        self.velocityInertial.x = LPF(self.velocityInertial.x, self.barometerVel, 0.05 * (((time - self.barometerTime) / 40) + 1))
-        self.positionInertial.x = LPF(self.positionInertial.x, self.barometerAlt, 0.05 * (((time - self.barometerTime) / 40) + 1))
+        self.velocityInertial.x = LPF(self.velocityInertial.x, self.barometerVel, 0.1 * (((time - self.barometerTime) / 40) + 1))
+        self.positionInertial.x = LPF(self.positionInertial.x, self.barometerAlt, 0.1 * (((time - self.barometerTime) / 40) + 1))
+
+        if self.accelerationLocal.x > 10:
+            self.inFlight = True
 
         if self.positionInertial.x <= 0:
             self.positionInertial.x = 0
@@ -366,4 +416,3 @@ class IMU6DOF:
                 self.oriRates.z = self.gyroScale.z
             if self.oriRates.z < -self.gyroScale.z:
                 self.oriRates.z = -self.gyroScale.z
-        

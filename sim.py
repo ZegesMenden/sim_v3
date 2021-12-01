@@ -244,7 +244,7 @@ lastCSV = 0.0
 
 dt = 1 / timeStep
 
-motor.ignite("ascent", 1.0)
+motor.ignite("ascent", 5.0)
 
 motor.maxIgnitionDelay = 0.78
 
@@ -261,11 +261,17 @@ baro.noise = 0.005
 IMU.gyroBias = vector3(np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD)
 IMU.accelBias = vector3(np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0])
 
-IMU.gyroNoise = abs(vector3(np.random.normal(0.2, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.2, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.2, 0.1, 1)[0] * DEG_TO_RAD))
-IMU.accelNoise = abs(vector3(np.random.normal(0.3, 0.2, 1)[0], np.random.normal(0.3, 0.2, 1)[0], np.random.normal(0.3, 0.2, 1)[0]))
+IMU.gyroNoise = abs(vector3(np.random.normal(0.3, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.3, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.3, 0.1, 1)[0] * DEG_TO_RAD))
+IMU.accelNoise = abs(vector3(np.random.normal(0.3, 0.1, 1)[0], np.random.normal(0.3, 0.1, 1)[0], np.random.normal(0.3, 0.1, 1)[0]))
 
 IMU.gyroScale = vector3(500 * DEG_TO_RAD, 500 * DEG_TO_RAD, 500 * DEG_TO_RAD)
 IMU.accelScale = vector3(40, 40, 40)
+
+NAV.oriKF.set_gains(vector3(7,7,7), vector3(0.7, 0.7, 0.7), vector3(0, 0, 0))
+NAV.oriKF.set_initial_value(vector3(0, 0, 0))
+
+NAV.accelKF.set_gains(vector3(3, 3, 3), vector3(5, 5, 5), vector3(0, 0, 0))
+NAV.accelKF.set_initial_value(vector3(0, 0, 0))
 
 TVC_command = vector3(0.0, 0.0, 0.0)
 
@@ -290,14 +296,16 @@ def readSensors(time, dt):
     IMU.readAccel(rocket.accelerationLocal, time)
     IMU.readGyro(rocket.rotationalVelocity, time)
 
-    if time < 1 and IMU.accel.x < 10 and NAV.debiased == False:
+    if time < 2 and IMU.accel.x < 10 and NAV.debiased == False:
         NAV.measureDebias(IMU.accel, IMU.oriRates)
     else:
-        NAV.inFlight = True
         NAV.debias()
         # NAV.accelOri(IMU.accel)
     
-    if NAV.inFlight:
+    # if NAV.inFlight == False:
+    #     NAV.oriKF.set_initial_value(vector3(0, 0, 0))
+    #     NAV.accelKF.set_initial_value(vector3(0, 0, 0))
+    if NAV.debiased:
         NAV.update(IMU.accel, IMU.oriRates, rocket.gravity, dt, time)
 
     if time > baro.lastRead + baro.readDelay:
@@ -401,7 +409,7 @@ def controlLoop():
     global setpoint
     if NAV.velocityInertial.x < 0 and apogee_sensed == 0.0:
         rocket.mass -= 0.025
-        burnAlt = 0.68 * NAV.positionInertial.x
+        burnAlt = 0.66 * NAV.positionInertial.x
         apogee_sensed = NAV.positionInertial.x
 
     if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt:
@@ -420,7 +428,7 @@ def controlLoop():
             pgrad.y -= 180 * DEG_TO_RAD
         else:
             pgrad.y += 180 * DEG_TO_RAD
-        pgrad.y *= -1
+        pgrad.y *= -0.5
         setpoint = pgrad
         # setpoint = vector3(0.0, 0.0, 0.0)
     else:
@@ -683,6 +691,15 @@ if "Y" in inp.upper():
     plt.xlabel("time")
     plt.ylabel("various readings deg/s")
 
+    plt.figure(7)
+
+    ax = p3.Axes3D(fig)
+
+    ax.set_xlim3d(-maxPosition, maxPosition)
+    ax.set_ylim3d(-maxPosition, maxPosition)
+    ax.set_zlim3d(0, maxPosition)
+
+    line_ani = animation.FuncAnimation(fig, )
     plt.show()
 
 print(f'{bcolors.ENDC}')
