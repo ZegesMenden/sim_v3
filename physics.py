@@ -313,25 +313,6 @@ class TVC:
 
     def actuate(self, command_angles, dt):
 
-        # self.commandY = command_angles.y
-        # self.commandZ = command_angles.z
-
-        # errorY = self.commandY - self.positionY
-        # errorZ = self.commandZ - self.positionZ
-
-        # speedY = self.servoSpeed * dt / self.linkageRatioY
-        # speedZ = self.servoSpeed * dt / self.linkageRatioZ
-
-        # errorY = clamp(errorY, -speedY, speedY)
-        # errorZ = clamp(errorZ, -speedZ, speedZ)
-        
-        # self.positionX = 0.0
-        # self.positionY += (errorY + (random.randint(-100, 100) / 100) * self.noiseY) * DEG_TO_RAD
-        # self.positionZ += (errorZ + (random.randint(-100, 100) / 100) * self.noiseZ) * DEG_TO_RAD
-        
-        # self.positionY = clamp(self.positionY, self.minY * DEG_TO_RAD, self.maxY * DEG_TO_RAD)
-        # self.positionZ = clamp(self.positionZ, self.minZ * DEG_TO_RAD, self.maxZ * DEG_TO_RAD)
-
         self.commandY = command_angles.y * RAD_TO_DEG * self.linkageRatioY
         self.commandZ = command_angles.z * RAD_TO_DEG * self.linkageRatioZ
 
@@ -361,5 +342,5 @@ class TVC:
         self.acceleration.z = np.sin(self.positionZ) * thrust
         self.acceleration.x = thrust - self.acceleration.y - self.acceleration.z
 
-        self.torque.y = thrust * np.sin(self.positionY) * self.lever
-        self.torque.z = thrust * np.sin(self.positionZ) * self.lever
+        self.torque.y = self.acceleration.y * self.lever
+        self.torque.z = self.acceleration.z * self.lever

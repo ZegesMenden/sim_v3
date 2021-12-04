@@ -57,7 +57,7 @@ class test_quaternion_math(unittest.TestCase):
         self.assertEqual( Quaternion().eulerToQuaternion(0.174533, 0.174533, 0.174533), Quaternion( 0.9892895259261897, 0.07892647901187541, 0.09406091491321403, 0.07892647901187543 ) )
 
     def test_quaternion_to_euler(self):
-        self.assertEqual( Quaternion( 0.9892895259261897, 0.07892647901187541, 0.09406091491321403, 0.07892647901187543 ).quaternionToEuler(), vector3( 0.174, 0.174, 0.174 ))
+        self.assertEqual( Quaternion( 0.9892895259261897, 0.07892647901187541, 0.09406091491321403, 0.07892647901187543 ).quaternionToEuler(), vector3( 0.1745, 0.1736, 0.1745 ))
 
 if __name__ == '__main__':
     unittest.main()

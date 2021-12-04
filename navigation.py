@@ -28,11 +28,11 @@ class DOF6:
         self.rotationalAcceleration = vector3(0.0, 0.0, 0.0)
 
         self.rotation_euler = vector3(0.0, 0.0, 0.0) # x is roll, y is pitch, z is yaw
-        self.rotaiton_quaternion = Quaternion()
+        self.rotation_quaternion = Quaternion()
         
     def oriFromEuler(self, x, y, z):
         self.rotation_euler = vector3(x, y, z)
-        self.rotaiton_quaternion = Quaternion().eulerToQuaternion(self.rotation_euler)
+        self.rotation_quaternion = Quaternion().eulerToQuaternion(self.rotation_euler)
     
     def addForce(self, force):
         self.accelerationLocal += force / self.mass
@@ -44,12 +44,12 @@ class DOF6:
 
     def update(self, dt):
         
-        self.rotationalVelocity += (self.rotationalAcceleration) * dt
-        self.rotationalVelocity.x = 0.0
-        self.rotaiton_quaternion.updateOrientation(self.rotationalVelocity.x, self.rotationalVelocity.y, self.rotationalVelocity.z, dt)
-        self.rotation_euler = self.rotaiton_quaternion.quaternionToEuler()
+        self.rotationalVelocity += self.rotationalAcceleration * dt
+        # self.rotationalVelocity.x = 0.0
+        self.rotation_quaternion.updateOrientation(self.rotationalVelocity.x, self.rotationalVelocity.y, self.rotationalVelocity.z, dt)
+        self.rotation_euler = self.rotation_quaternion.quaternionToEuler()
 
-        self.accelerationInertial = self.rotaiton_quaternion.rotateVector(vector3(self.accelerationLocal.x, self.accelerationLocal.y, self.accelerationLocal.z))
+        self.accelerationInertial = self.rotation_quaternion.rotateVector(vector3(self.accelerationLocal.x, self.accelerationLocal.y, self.accelerationLocal.z))
         self.accelerationInertial += self.gravity
 
         self.velocityInertial += self.accelerationInertial * dt
