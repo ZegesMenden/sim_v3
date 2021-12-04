@@ -5,6 +5,9 @@ from navigation import *
 from motors import *
 
 import matplotlib.pyplot as plt
+import mpl_toolkits.mplot3d.axes3d as p3
+import matplotlib.animation as animation
+
 import numpy as np
 
 DEG_TO_RAD = np.pi / 180
@@ -196,8 +199,8 @@ FSF_ori_X = FSF_ori(fsf_gains_X, fsf_setpoint_X, 0)
 FSF_ori_Y = FSF_ori(fsf_gains_Y, fsf_setpoint_Y, 0)
 FSF_ori_Z = FSF_ori(fsf_gains_Z, fsf_setpoint_Z, 0)
 
-fsf_test_z = FSF_ori_test(22.36, 5.24)
-fsf_test_y = FSF_ori_test(22.36, 5.24)
+fsf_test_z = FSF_ori_test(22.36, 7.58)
+fsf_test_y = FSF_ori_test(22.36, 7.58)
 
 rocket_TVC = TVC()
 
@@ -205,8 +208,8 @@ rocket_TVC.lever = 0.24
 rocket_TVC.linkageRatioZ = 10
 rocket_TVC.linkageRatioY = 10
 
-rocket_TVC.noiseY = 0.2 * DEG_TO_RAD
-rocket_TVC.noiseZ = 0.2 * DEG_TO_RAD
+rocket_TVC.noiseY = 0.05 * DEG_TO_RAD
+rocket_TVC.noiseZ = 0.05 * DEG_TO_RAD
 
 rocket_TVC.servoSpeed = 200
 
@@ -217,11 +220,11 @@ rocket_TVC.minZ = -3
 
 TVC_derolled = vector3( 0.0, 0.0, 0.0 )
 
-rocket_TVC.positionY = random.randint(-100, 100) / 1000 * DEG_TO_RAD
-rocket_TVC.positionZ = random.randint(-100, 100) / 1000 * DEG_TO_RAD
+rocket_TVC.positionY = random.randint(-100, 100) / 5000 * DEG_TO_RAD
+rocket_TVC.positionZ = random.randint(-100, 100) / 5000 * DEG_TO_RAD
 
-rocket_TVC.offsetY = random.randint(-100, 100) / 1000 * DEG_TO_RAD
-rocket_TVC.offsetZ = random.randint(-100, 100) / 1000 * DEG_TO_RAD
+rocket_TVC.offsetY = random.randint(-100, 100) / 5000 * DEG_TO_RAD
+rocket_TVC.offsetZ = random.randint(-100, 100) / 5000 * DEG_TO_RAD
 
 time = 0.0
 missionTime = 0.0
@@ -234,7 +237,7 @@ currentStep = 0
 sensorDelay = 1 / 500
 lastSensor = 0.0
 
-controlSpeed = 25
+controlSpeed = 40
 controlDelay = 1 / controlSpeed
 lastControl = 0.0
 
@@ -258,28 +261,28 @@ IMU.sampleRateGyro = 1 / 500
 
 baro.noise = 0.005
 
-IMU.gyroBias = vector3(np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 1, 1)[0] * DEG_TO_RAD)
+IMU.gyroBias = vector3(np.random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD)
 IMU.accelBias = vector3(np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0])
 
-IMU.gyroNoise = abs(vector3(np.random.normal(0.3, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.3, 0.1, 1)[0] * DEG_TO_RAD, np.random.normal(0.3, 0.1, 1)[0] * DEG_TO_RAD))
-IMU.accelNoise = abs(vector3(np.random.normal(0.3, 0.1, 1)[0], np.random.normal(0.3, 0.1, 1)[0], np.random.normal(0.3, 0.1, 1)[0]))
+IMU.gyroNoise = vector3(0.5 * DEG_TO_RAD, 0.5 * DEG_TO_RAD, 0.5 * DEG_TO_RAD)
+IMU.accelNoise = abs(vector3(np.random.normal(0.2, 0.1, 1)[0], np.random.normal(0.2, 0.1, 1)[0], np.random.normal(0.2, 0.1, 1)[0]))
 
-IMU.gyroScale = vector3(500 * DEG_TO_RAD, 500 * DEG_TO_RAD, 500 * DEG_TO_RAD)
+IMU.gyroScale = vector3(1000 * DEG_TO_RAD, 1000 * DEG_TO_RAD, 1000 * DEG_TO_RAD)
 IMU.accelScale = vector3(40, 40, 40)
 
-NAV.oriKF.set_gains(vector3(7,7,7), vector3(0.7, 0.7, 0.7), vector3(0, 0, 0))
+NAV.oriKF.set_gains(vector3(1,1,1), vector3(3, 3, 3), vector3(1, 1, 1))
 NAV.oriKF.set_initial_value(vector3(0, 0, 0))
 
-NAV.accelKF.set_gains(vector3(3, 3, 3), vector3(5, 5, 5), vector3(0, 0, 0))
+NAV.accelKF.set_gains(vector3(4, 4, 4), vector3(8, 8, 8), vector3(1, 1, 1))
 NAV.accelKF.set_initial_value(vector3(0, 0, 0))
 
 TVC_command = vector3(0.0, 0.0, 0.0)
 
 controlVelocity = False
-followSetpoint = True
+followSetpoint = False
 
-NAV.orientation_euler = rocket.rotation_euler
-NAV.orientation_quat = rocket.rotaiton_quaternion
+NAV.orientation_euler = vector3(rocket.rotation_euler.x, rocket.rotation_euler.y, rocket.rotation_euler.z)
+NAV.orientation_quat = Quaternion(rocket.rotaiton_quaternion.w, rocket.rotaiton_quaternion.x, rocket.rotaiton_quaternion.y, rocket.rotaiton_quaternion.z)
 
 # user defined functions and variables
 global apogee_sensed
@@ -296,7 +299,7 @@ def readSensors(time, dt):
     IMU.readAccel(rocket.accelerationLocal, time)
     IMU.readGyro(rocket.rotationalVelocity, time)
 
-    if time < 2 and IMU.accel.x < 10 and NAV.debiased == False:
+    if time < 4.5 and IMU.accel.x < 10 and NAV.debiased == False:
         NAV.measureDebias(IMU.accel, IMU.oriRates)
     else:
         NAV.debias()
@@ -403,20 +406,34 @@ def logCSV():
 
 global burnAlt
 burnAlt = 0.0
+global retroPeak
+retroPeak = 0.0
+
 def controlLoop():
+
     global apogee_sensed
     global burnAlt
     global setpoint
+    global retroPeak
+
     if NAV.velocityInertial.x < 0 and apogee_sensed == 0.0:
         rocket.mass -= 0.025
-        burnAlt = 0.66 * NAV.positionInertial.x
+        burnAlt = 0.65 * NAV.positionInertial.x
         apogee_sensed = NAV.positionInertial.x
 
     if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt:
         motor.ignite("landing", time)
 
+    if apogee_sensed > 0 and NAV.accelerationLocal.x > 25:
+        retroPeak = time
+
     setpoint = vector3(0, 0, 0)
     # print(round(rocket.velocityInertial.dir() * RAD_TO_DEG, 2))
+
+    if missionTime > 1 and missionTime < 1.5:
+        setpoint = vector3(0, 5 * DEG_TO_RAD, 0)
+    if missionTime > 1.5 and missionTime < 2:
+        setpoint = vector3(0, 0, 0)
 
     if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt and NAV.velocityInertial.x < -1:
         pgrad = NAV.velocityInertial.dir()
@@ -428,13 +445,17 @@ def controlLoop():
             pgrad.y -= 180 * DEG_TO_RAD
         else:
             pgrad.y += 180 * DEG_TO_RAD
-        pgrad.y *= -0.5
+        pgrad.y *= -1
+        pgrad.x = 0.0
+        pgrad *= 0.25
+
         setpoint = pgrad
         # setpoint = vector3(0.0, 0.0, 0.0)
-    else:
-        setpoint = vector3(0.0, 0.0, 0.0)
 
-    if followSetpoint == True and missionTime < 3:
+    if time > retroPeak + 1.5 and NAV.positionInertial.x < burnAlt:
+        setpoint = vector3(0, 0, 0)
+
+    if followSetpoint == True:
 
         if controlVelocity == False:
             ori_setpoint.getCurrentSetpoint(missionTime)
@@ -499,6 +520,9 @@ while time < simTime:
     rocket.addTorque(rocket.rotationalVelocity * -0.05)
     rocket.addForce(vector3(rocket.velocityInertial.x * -0.025, rocket.velocityInertial.z * -0.025, rocket.velocityInertial.z * -0.025))
 
+    rocket.update(dt)
+
+
     if NAV.accelerationLocal.x > 2:
         rocket_TVC.actuate(TVC_command, dt)
     else:
@@ -516,7 +540,6 @@ while time < simTime:
         logCSV()
         lastCSV = time
 
-    rocket.update(dt)
     rocket.clear()
 
     if abs(rocket.positionInertial.x) > maxPosition:
@@ -588,7 +611,7 @@ print(f'''
 {bcolors.WARNING}------------------------------------------------------
 {bcolors.ENDC}''')
 
-if abs(rocket.positionInertial.y) < 1.5 and abs(rocket.positionInertial.z) > 3 and abs(rocket.positionInertial.z) < 5:
+if abs(rocket.positionInertial.z) < 8 and abs(rocket.positionInertial.y) < 8:
     if abs(rocket.velocityInertial.y) < 0.5 and abs(rocket.velocityInertial.z) < 0.5 and abs(rocket.velocityInertial.x) < 7:
         if abs(rocket.rotation_euler.y) < 5 * DEG_TO_RAD and abs(rocket.rotation_euler.z) < 5 * DEG_TO_RAD:
 
@@ -691,15 +714,59 @@ if "Y" in inp.upper():
     plt.xlabel("time")
     plt.ylabel("various readings deg/s")
 
-    plt.figure(7)
+    fig = plt.figure(7)
 
     ax = p3.Axes3D(fig)
 
     ax.set_xlim3d(-maxPosition, maxPosition)
     ax.set_ylim3d(-maxPosition, maxPosition)
     ax.set_zlim3d(0, maxPosition)
+    
+    # numDataPoints = len(plot_position)
+    
+    # def func(num, dataset, line):
+    #     line.set_data([dataset[2], dataset[1]])
+    #     line.set_3d_properties(dataset[0])
+    #     return line
+    
 
-    line_ani = animation.FuncAnimation(fig, )
+    # line = plt.plot(plot_position[3], plot_position[2], plot_position[1], lw=2, c='g')[0]
+
+    # line_ani = animation.FuncAnimation(fig, func, frames=numDataPoints, fargs=(plot_position, line), interval=50, blit=False)
+
+    def func(num, dataSet, line):
+        # NOTE: there is no .set_data() for 3 dim data...
+        xcur = dataSet[2][num]
+        for x in dataSet[2]:
+            if x >= xcur-0.1 and x <= xcur -0.1:
+                num
+        line.set_data(dataSet[0:2, num-10:num])    
+        line.set_3d_properties(dataSet[2, num-10:num])    
+        return line
+
+    # # THE DATA POINTS
+    t = np.array(plot_position[1]) # This would be the z-axis ('t' means time here)
+    x = np.array(plot_position[2])
+    y = np.array(plot_position[3])
+    # dataSet = np.array([plot_position[3], plot_position[2], plot_position[1]])
+    # numDataPoints = len(plot_position[0])
+    dataSet = np.array([x, y, t])
+
+    numDataPoints = len(t)
+    print(numDataPoints)
+    # NOTE: Can't pass empty arrays into 3d version of plot()
+    line = plt.plot(dataSet[0], dataSet[1], dataSet[2], lw=2, c='g')[0] # For line plot
+    
+    # AXES PROPERTIES]
+    # ax.set_xlim3d([limit0, limit1])
+    ax.set_xlabel('y')
+    ax.set_ylabel('z')
+    ax.set_zlabel('x')
+    ax.set_title('Trajectory of electron for E vector along [120]')
+    
+    # Creating the Animation object
+    line_ani = animation.FuncAnimation(fig, func, frames=numDataPoints, fargs=(dataSet,line), interval=(time/numDataPoints), blit=False)
+    # line_ani.save(r'AnimationNew.mp4')
     plt.show()
 
 print(f'{bcolors.ENDC}')
