@@ -202,7 +202,7 @@ class kalmanFilter:
         self.p += self.q
         k = self.p / ( self.p + self.r )
         self.x += k * ( sensor_reading - self.x )
-        self.p = ( vector3(1, 1, 1) - k ) * self.p
+        self.p = ( vector3(1.0, 1.0, 1.0) - k ) * self.p
 
     def output(self):
 
@@ -216,6 +216,68 @@ class kalmanFilter:
     
     def error_estimated(self):
         return self.p
+
+class kf:
+
+    def __init__(self):
+
+        self.a = vector3(1, 1, 1)
+        self.b = vector3(1, 1, 1)
+        self.c = vector3(1, 1, 1)
+
+        self.q = vector3()
+        self.r = vector3()
+        self.u = vector3()
+
+        self.x_hat = vector3()
+        self.p = vector3()
+
+    def update(self, sensor_reading):
+        x_hat_minus_1 = self.a * self.x_hat + self.b * self.u
+
+        self.p = self.a * self.p * self.a + self.q
+
+        k = self.p * self.c * ( vector3(1, 1, 1) / ( self.c * self.p * self.c * self.r ))
+        x_hat_minus_1 += k * (sensor_reading - self.c * x_hat_minus_1)
+
+        self.p = (vector3(1, 1, 1) - k * self.c) * self.p
+
+        self.x_hat = x_hat_minus_1
+
+    def output(self):
+        return self.x_hat
+
+    def set_gains(self, q, r, p):
+
+        self.q = q
+        self.r = r
+        self.p = p
+    
+    def set_initial_value(self, x):
+
+        self.x_hat = x
+#   double  A, B, C;
+#   double  Q, R;
+#   double  U = 0.0, Y = 0.0;
+#   double  x_hat = 0.0, P = 0.0;
+
+#   // kalman loop function
+
+#   double Kalman::Kalman_Filter_Update() {
+
+#     double x_hat_minus_1 = A * x_hat + B * U;
+
+#     P = A * P * A + Q;
+
+#     double K = P * C * (1.0f / (C * P * C + R));
+
+#     x_hat_minus_1 += K * (Y - C * x_hat_minus_1);
+
+#     P = (1 - K *  C) *  P;
+
+#     x_hat = x_hat_minus_1;
+
+#     return x_hat;
 
 class NAVController:
 
@@ -250,8 +312,8 @@ class NAVController:
         self.debiased = False
         self.inFlight = False
 
-        self.oriKF = kalmanFilter()
-        self.accelKF = kalmanFilter()
+        self.oriKF = kf()
+        self.accelKF = kf()
 
     def update(self, acceleration, rotationalVel, gravity, dt, time):
 
@@ -396,9 +458,9 @@ class IMU6DOF:
 
             self.lastReadGyro = time
 
-            self.oriRates.x = trueOriRates.x + np.random.normal(0, self.gyroNoise.x, 1)[0]
-            self.oriRates.y = trueOriRates.y + np.random.normal(0, self.gyroNoise.y, 1)[0]
-            self.oriRates.z = trueOriRates.z + np.random.normal(0, self.gyroNoise.z, 1)[0]
+            self.oriRates.x = trueOriRates.x + np.random.normal(0, self.gyroNoise.x, 1)[0] * DEG_TO_RAD
+            self.oriRates.y = trueOriRates.y + np.random.normal(0, self.gyroNoise.y, 1)[0] * DEG_TO_RAD
+            self.oriRates.z = trueOriRates.z + np.random.normal(0, self.gyroNoise.z, 1)[0] * DEG_TO_RAD
 
             self.oriRates += self.gyroBias
 
