@@ -33,7 +33,9 @@ class vector3:
 
             x = self.x * vector.x
             y = self.y * vector.y
-            z = self.y * vector.z
+            z = self.z * vector.z
+
+            return vector3(x, y, z)
 
         else:
 
@@ -41,7 +43,7 @@ class vector3:
             y = self.y * vector
             z = self.z * vector
 
-        return vector3(x, y, z)
+            return vector3(x, y, z)
     
     def __truediv__(self, vector):
         
@@ -49,7 +51,9 @@ class vector3:
 
             x = self.x / vector.x
             y = self.y / vector.y
-            z = self.y / vector.z
+            z = self.z / vector.z
+
+            return vector3(x, y, z)
 
         else:
 
@@ -57,23 +61,45 @@ class vector3:
             y = self.y / vector
             z = self.z / vector
 
-        return vector3(x, y, z)
+            return vector3(x, y, z)
 
     def __add__(self, vector):
 
-        x = self.x + vector.x
-        y = self.y + vector.y
-        z = self.z + vector.z
+        if isinstance(vector, vector3):
+
+            x = self.x + vector.x
+            y = self.y + vector.y
+            z = self.z + vector.z
+            
+            return vector3(x, y, z)
         
-        return vector3(x, y, z)
+        else:
+
+            x = self.x + vector
+            y = self.y + vector
+            z = self.z + vector
+
+            return vector3(x, y, z)
+            
 
     def __sub__(self, vector):
 
-        x = self.x - vector.x
-        y = self.y - vector.y
-        z = self.z - vector.z
+        if isinstance(vector, vector3):
+
+            x = self.x - vector.x
+            y = self.y - vector.y
+            z = self.z - vector.z
+            
+            return vector3(x, y, z)
         
-        return vector3(x, y, z)
+        else:
+
+            x = self.x - vector
+            y = self.y - vector
+            z = self.z - vector
+
+            return vector3(x, y, z)
+            
 
     def __eq__(self, vector):
         
@@ -113,21 +139,14 @@ class vector3:
     def dir(self):
         return vector3(np.arctan2(self.z, self.y), np.arctan2(self.z, self.x), np.arctan2(self.y, self.x))
 
-    def degRad(self):
+    def fromQuaternion(self, quaternion):
+        if isinstance(quaternion, Quaternion):
 
-        self.x *= DEG_TO_RAD
-        self.y *= DEG_TO_RAD
-        self.z *= DEG_TO_RAD
+            self.x = quaternion.x
+            self.y = quaternion.y
+            self.z = quaternion.z
 
-        return self
-
-    def radDeg(self):
-
-        self.x *= RAD_TO_DEG
-        self.y *= RAD_TO_DEG
-        self.z *= RAD_TO_DEG
-
-        return self
+            return self
 
     def __str__(self):
 
@@ -144,21 +163,44 @@ class Quaternion:
 
     def __add__(self, quaternion):
 
-        self.w += quaternion.w
-        self.x += quaternion.x
-        self.y += quaternion.y
-        self.z += quaternion.z
+        if isinstance(quaternion, Quaternion):
+
+            w = self.w + quaternion.w
+            x = self.x + quaternion.x
+            y = self.y + quaternion.y
+            z = self.z + quaternion.z
+
+            return Quaternion(w, x, y, z)
         
-        return self
+        else:
+
+            w = self.w + quaternion
+            x = self.x + quaternion
+            y = self.y + quaternion
+            z = self.z + quaternion
+
+            return Quaternion(w, x, y, z)
+
 
     def __sub__(self, quaternion):
 
-        self.w -= quaternion.w
-        self.x -= quaternion.x
-        self.y -= quaternion.y
-        self.z -= quaternion.z
+        if isinstance(quaternion, Quaternion):
+
+            w = self.w - quaternion.w
+            x = self.x - quaternion.x
+            y = self.y - quaternion.y
+            z = self.z - quaternion.z
+
+            return Quaternion(w, x, y, z)
         
-        return self
+        else:
+
+            w = self.w - quaternion
+            x = self.x - quaternion
+            y = self.y - quaternion
+            z = self.z - quaternion
+
+            return Quaternion(w, x, y, z)
 
     def __mul__(self, quaternion):
         
@@ -188,7 +230,17 @@ class Quaternion:
 
         return Quaternion(self.w, -self.x, -self.y, -self.z)
 
+    def fractional(self, alpha):
+
+        self.w = 1-alpha + alpha*self.w
+        self.x *= alpha
+        self.y *= alpha
+        self.z *= alpha
+        
+        return self.norm()
+
     def __str__(self):
+        
         return str(self.w) + ',' + str(self.x) + ',' + str(self.y) + ',' + str(self.z)
 
     def __eq__(self, quaternion):
@@ -237,87 +289,73 @@ class Quaternion:
 
         return self
 
-    def updateOrientation(self, x, y, z, dt):
+    def rotateVector(self, v):
 
-        angle = vector3(x, y, z).len()
+        if isinstance(v, vector3):
 
-        if angle == 0:
-            angle = 1e-5
-        
-        qD = Quaternion(0.0, 0.0, 0.0, 0.0).fromAxisAngle(angle * dt, x/angle, y/angle, z/angle)
-
-        qM = self * qD
-        self.w = qM.w
-        self.x = qM.x
-        self.y = qM.y
-        self.z = qM.z
-
-        return self
-
-    def rotateVector(self, vector):
-
-        if isinstance(vector, vector3):
-
-            rVector = Quaternion(0.0, vector.x, vector.y, vector.z)
+            rVector = Quaternion(0.0, 0.0, 0.0, 0.0).fromVector(v)
             rVector = self * rVector * self.conj()
 
-            return vector3(rVector.x, rVector.y, rVector.z)
+            return vector3(0, 0, 0).fromQuaternion(rVector)
+        elif isinstance(v, Quaternion):
+
+            v.w = 0.0
+            v = self * v * self.conj()
+
+            return vector3(0, 0, 0).fromQuaternion(v)
 
         else:
-            return False
 
-    def getVectorGuidance(self, vec):
-        target = vec.norm()
-        target = self.conj().rotateVector(target)
+            return TypeError
+    
+    def fromVector(self, vector):
+        if isinstance(vector, vector3):
 
-        y_out = np.arctan2(-target.z, target.x)
-        z_out = np.arctan2(target.y, target.x)
+            self.x = vector.x
+            self.y = vector.y
+            self.z = vector.z
 
-        return vector3(0.0, y_out, z_out)
+            return self
+        elif isinstance(vector, Quaternion):
 
+            self = vector
+
+            return self
+        else:
+            raise TypeError
+            
 class TVC:
     
     def __init__(self):
         
-        self.commandY = 0.0
-        self.commandZ = 0.0
+        self.command = vector3()
 
-        self.positionX = 0.0
-        self.positionY = 0.0
-        self.positionZ = 0.0
+        self.position = vector3()
 
-        self.ServopositionY = 0.0
-        self.ServopositionZ = 0.0
+        self.Servoposition = vector3()
 
-        self.minY = 0.0
-        self.maxY = 0.0
+        self.min = vector3()
+        self.max = vector3()
 
-        self.minZ = 0.0
-        self.maxZ = 0.0
+        self.offset = vector3()
 
-        self.offsetY = 0.0
-        self.offsetZ = 0.0
-
-        self.noiseY = 0.0
-        self.noiseZ = 0.0
+        self.noise = vector3()
 
         self.servoSpeed = 0.0
 
-        self.linkageRatioY = 0.0
-        self.linkageRatioZ = 0.0
+        self.linkageRatio = vector3()
 
         self.lever = 0.0
 
         self.torque = vector3(0.0, 0.0, 0.0)
         self.acceleration = vector3(0.0, 0.0, 0.0)
 
-    def actuate(self, command_angles, dt):
+    def actuate(self, command_angles: vector3, dt):
 
-        self.commandY = command_angles.y * RAD_TO_DEG * self.linkageRatioY
-        self.commandZ = command_angles.z * RAD_TO_DEG * self.linkageRatioZ
+        self.command = command_angles * RAD_TO_DEG * self.linkageRatio
 
-        errorY = self.commandY - self.ServopositionY
-        errorZ = self.commandZ - self.ServopositionZ
+        errorY = self.command.y - self.Servoposition.y
+        errorZ = self.command.z - self.Servoposition.z
 
         speedY = self.servoSpeed * dt
         speedZ = self.servoSpeed * dt
@@ -325,22 +363,92 @@ class TVC:
         errorY = clamp(errorY, -speedY, speedY)
         errorZ = clamp(errorZ, -speedZ, speedZ)
 
-        self.ServopositionY += errorY
-        self.ServopositionZ += errorZ
+        self.Servoposition.y += errorY
+        self.Servoposition.z += errorZ
 
-        self.positionY = ( round(self.ServopositionY, 0) / self.linkageRatioY + random.randint(-100, 100) / 100 * self.noiseY) * DEG_TO_RAD
-        self.positionZ = ( round(self.ServopositionZ, 0) / self.linkageRatioZ + random.randint(-100, 100) / 100 * self.noiseZ) * DEG_TO_RAD
+        self.position.y = ( round(self.Servoposition.y, 0) / self.linkageRatio.y + random.randint(-100, 100) / 100 * self.noise.y) * DEG_TO_RAD
+        self.position.z = ( round(self.Servoposition.z, 0) / self.linkageRatio.z + random.randint(-100, 100) / 100 * self.noise.z) * DEG_TO_RAD
 
-        self.positionY += self.offsetY
-        self.positionZ += self.offsetZ
+        self.position.y += self.offset.y
+        self.position.z += self.offset.z
 
-        self.positionY = clamp(self.positionY, self.minY * DEG_TO_RAD, self.maxY * DEG_TO_RAD)
-        self.positionZ = clamp(self.positionZ, self.minZ * DEG_TO_RAD, self.maxZ * DEG_TO_RAD)
+        self.position.y = clamp(self.position.y, self.min.y * DEG_TO_RAD, self.max.y * DEG_TO_RAD)
+        self.position.z = clamp(self.position.z, self.min.z * DEG_TO_RAD, self.max.z * DEG_TO_RAD)
 
     def calculateForces(self, thrust):
-        self.acceleration.y = np.sin(self.positionY) * thrust
-        self.acceleration.z = np.sin(self.positionZ) * thrust
+        
+        self.acceleration.y = np.sin(self.position.y) * thrust
+        self.acceleration.z = np.sin(self.position.z) * thrust
         self.acceleration.x = thrust - self.acceleration.y - self.acceleration.z
 
         self.torque.y = self.acceleration.y * self.lever
         self.torque.z = self.acceleration.z * self.lever
+
+class DOF6:
+
+    def __init__(self, name):
+
+        self.name = name
+
+        self.time = 0.0
+
+        self.dryMass = 0.0
+        self.mass = 0.0
+
+        self.mmoi = vector3(0.0, 0.0, 0.0)
+        self.gravity = vector3(0.0, 0.0, 0.0)
+
+        self.accelerationLocal = vector3(0.0, 0.0, 0.0)
+        self.accelerationInertial = vector3(0.0, 0.0, 0.0)
+        self.velocityInertial = vector3(0.0, 0.0, 0.0)
+        self.positionInertial = vector3(0.0, 0.0, 0.0)
+
+        self.rotationalVelocity = vector3(0.0, 0.0, 0.0)
+        self.localRotationalAcceleration = vector3(0.0, 0.0, 0.0)
+        self.rotationalAcceleration = vector3(0.0, 0.0, 0.0)
+
+        self.rotation_euler = vector3(0.0, 0.0, 0.0) # x is roll, y is pitch, z is yaw
+        self.rotation_quaternion = Quaternion()
+    
+    def addLocalForce(self, force):
+        self.accelerationInertial += self.rotation_quaternion.rotateVector(force / self.mass)
+
+    def addGlobalForce(self, force):
+        self.accelerationInertial += force / self.mass
+
+    def addLocalTorque(self, torque):
+        self.addGlobalTorque(self.rotation_quaternion.rotateVector(torque))
+
+    def addGlobalTorque(self, torque):
+        self.rotationalAcceleration.x += torque.x / self.mmoi.x
+        self.rotationalAcceleration.y += torque.y / self.mmoi.y
+        self.rotationalAcceleration.z += torque.z / self.mmoi.z
+        
+
+    def update(self, dt):
+
+        self.rotationalVelocity += self.rotationalAcceleration * dt
+        
+        ang = self.rotationalVelocity.len()
+
+        if ang == 0:
+            ang = 1e-5
+
+        self.rotation_quaternion *= Quaternion(0.0, 0.0, 0.0, 0.0).fromAxisAngle(ang*dt, self.rotationalVelocity.x/ang, self.rotationalVelocity.y/ang, self.rotationalVelocity.z/ang)
+
+        self.rotation_euler = self.rotation_quaternion.quaternionToEuler()
+
+        self.accelerationInertial += self.gravity
+
+        self.velocityInertial += self.accelerationInertial * dt
+        self.positionInertial += self.velocityInertial * dt
+
+        if self.positionInertial.x <= 0:
+            self.velocityInertial = vector3(0.0, 0.0, 0.0)
+            self.rotationalVelocity = vector3(0.0, 0.0, 0.0)
+            self.positionInertial = vector3(0.0, self.positionInertial.y, self.positionInertial.z)
+
+    def clear(self):
+        self.rotationalAcceleration = vector3(0.0, 0.0, 0.0)
+        self.accelerationInertial = vector3(0.0, 0.0, 0.0)
+        self.accelerationLocal = vector3(0.0, 0.0, 0.0)

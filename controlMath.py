@@ -94,76 +94,7 @@ class PID:
         else:
             self.output = self.proportional + self.integral - self.derivitive
 
-class FSF_oriPos:
-    #gains
-    # fsf_gains = np.matrix([0,0,0,0])
-
-    #setpoints (ori, rotVel, position, velocity)
-    # fsf_setpoint = np.array([0,0,0,0])
-
-    lastOri = 0
-    lastPos = 0
-
-    I = 0
-    output = 0
-
-    def __init__(self, _gains, _setpoint, iGain):
-        self.fsf_gains = _gains
-        self.fsf_setpoint = _setpoint
-        self.iGain = iGain
-
-    def compute(self, pos, ori, dt):
-        x = np.matrix([
-            [ori - self.fsf_setpoint[0]],
-            [((ori - self.lastOri) / dt) - self.fsf_setpoint[1]],
-            [pos - self.fsf_setpoint[2]],
-            [((pos - self.lastPos)) - self.fsf_setpoint[3]]
-        ])
-        out = -self.fsf_gains * x
-        self.output = np.sum(out)
-        self.I += self.output * self.iGain
-        self.lastOri = ori
-        self.lastPos = pos
-        self.output += self.I
-    
-    def setSetpoint(self, ori, oriRate, pos, vel):
-        self.fsf_gains = np.array([ori, oriRate, pos, vel])
-    
-    def reset(self):
-        self.output = 0
-        self.lastPos = 0
-        self.lastOri = 0
-        self.I = 0
-
-class FSF_ori:
-    lastOri = 0
-    I = 0
-    output = 0
-
-    def __init__(self, _gains, _setpoint, iGain):
-        self.fsf_gains = _gains
-        self.fsf_setpoint = _setpoint
-        self.iGain = iGain
-
-    def compute(self, ori, dt):
-        x = np.matrix([
-            [ori - self.fsf_setpoint[0]],
-            [((ori - self.lastOri) / dt) - self.fsf_setpoint[1]]])
-        out = -self.fsf_gains * x
-        self.output = np.sum(out)
-        self.I += self.output * self.iGain
-        self.lastOri = ori
-        self.output += self.I
-    
-    def setSetpoint(self, ori, oriRate):
-        self.fsf_gains = np.array([ori, oriRate])
-    
-    def reset(self):
-        self.output = 0
-        self.lastOri = 0
-        self.I = 0
-
-class FSF_ori_test:
+class FSF:
 
     def __init__(self, gain_a, gain_b):
         self.gain_a = gain_a
@@ -179,45 +110,10 @@ class FSF_ori_test:
     def getOutput(self):
         return self.output
 
-class kalmanFilter:
+class kalman:
 
-    def __init__(self):
-
-        self.q = vector3() # process noise
-        self.r = vector3() # sensor noise
-        self.p = vector3() # estimated error
-        self.x = vector3() # state
-
-    def set_gains(self, q, r, p):
-
-        self.q = q
-        self.r = r
-        self.p = p
-
-    def set_initial_value(self, x):
-
-        self.x = x
-
-    def update(self, sensor_reading):
-        self.p += self.q
-        k = self.p / ( self.p + self.r )
-        self.x += k * ( sensor_reading - self.x )
-        self.p = ( vector3(1.0, 1.0, 1.0) - k ) * self.p
-
-    def output(self):
-
-        return self.x
-
-    def sensor_noise(self):
-        return self.r
-
-    def process_noise(self):
-        return self.q
-    
-    def error_estimated(self):
-        return self.p
-
-class kf:
+    # just a python implementation of atlas aerospace's arduino kalman filter:
+    # https://github.com/atlas-aerospace-yt/Arduino-Kalman-Filter
 
     def __init__(self):
 
@@ -233,6 +129,7 @@ class kf:
         self.p = vector3()
 
     def update(self, sensor_reading):
+
         x_hat_minus_1 = self.a * self.x_hat + self.b * self.u
 
         self.p = self.a * self.p * self.a + self.q
@@ -247,37 +144,10 @@ class kf:
     def output(self):
         return self.x_hat
 
-    def set_gains(self, q, r, p):
+    def set_gains(self, q, r):
 
         self.q = q
         self.r = r
-        self.p = p
-    
-    def set_initial_value(self, x):
-
-        self.x_hat = x
-#   double  A, B, C;
-#   double  Q, R;
-#   double  U = 0.0, Y = 0.0;
-#   double  x_hat = 0.0, P = 0.0;
-
-#   // kalman loop function
-
-#   double Kalman::Kalman_Filter_Update() {
-
-#     double x_hat_minus_1 = A * x_hat + B * U;
-
-#     P = A * P * A + Q;
-
-#     double K = P * C * (1.0f / (C * P * C + R));
-
-#     x_hat_minus_1 += K * (Y - C * x_hat_minus_1);
-
-#     P = (1 - K *  C) *  P;
-
-#     x_hat = x_hat_minus_1;
-
-#     return x_hat;
 
 class NAVController:
 
@@ -312,8 +182,8 @@ class NAVController:
         self.debiased = False
         self.inFlight = False
 
-        self.oriKF = kf()
-        self.accelKF = kf()
+        self.oriKF = kalman()
+        self.accelKF = kalman()
 
     def update(self, acceleration, rotationalVel, gravity, dt, time):
 
@@ -326,14 +196,14 @@ class NAVController:
 
         self.accelKF.update(self.accelerationLocal)
         self.accelerationLocalFiltered = self.accelKF.output()
-        # self.accelerationLocalFiltered = LPF(self.accelerationLocalFiltered, self.lastAccelerationLocal, 0.05)
 
         self.oriKF.update(self.oriRates)
         self.oriRatesFiltered = self.oriKF.output()
         
-        # self.oriRatesFiltered = LPF(self.oriRatesFiltered, self.lastOriRates, 0.05)
-        
-        self.orientation_quat.updateOrientation( self.oriRatesFiltered.x, self.oriRatesFiltered.y, self.oriRatesFiltered.z, dt )
+        ang = self.oriRatesFiltered.len()
+
+        self.orientation_quat *= Quaternion(0, 0, 0, 0).fromAxisAngle(ang*dt, self.oriRatesFiltered.x/ang, self.oriRatesFiltered.y/ang, self.oriRatesFiltered.z/ang)
+
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
 
         self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocalFiltered)
@@ -357,9 +227,9 @@ class NAVController:
         #     self.oriRatesFiltered = self.oriRates
     
     def accelOri(self, accel):
-        self.orientation_euler.y = np.arctan2(accel.y, accel.z)
-        self.orientation_euler.z = np.arctan2(accel.z, accel.y)
-        self.orientation_quat = self.orientation_quat.eulerToQuaternion(self.orientation_euler.x, self.orientation_euler.y, self.orientation_euler.z)
+        q = Quaternion().fromVector(self.orientation_quat.rotateVector(accel)) * Quaternion(0, 1, 0, 0)
+        q.w = 1 - q.w
+        self.orientation_quat = Quaternion().fromVector(self.orientation_quat.conj().rotateVector(q.fractional(0.5)))
 
     def passBarometerData(self, barometerAlt, barometerVel, time):
         self.barometerAlt = barometerAlt
@@ -373,7 +243,7 @@ class NAVController:
             self.gyroscopeBias += rotationalVel
 
     def debias(self):
-        if self.debiased == False:
+        if self.debiased == False and self.debiasCount > 0:
             self.accelBias /= self.debiasCount
             self.gyroscopeBias /= self.debiasCount
             self.debiased = True
