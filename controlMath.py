@@ -1,10 +1,11 @@
+import math
 import numpy as np
 import random
 from physics import *
 
 def calculateAngleFromDesiredTorque(moment_arm, force, mmoi, desired_torque):
     calcval = desired_torque * mmoi / force / moment_arm
-    return np.arcsin(calcval)
+    return math.asin(calcval)
 
 def positive_or_negative():
     if random.random() < 0.5:
@@ -18,12 +19,12 @@ def LPF(new, old, gain):
 class PID:
     def __init__(self, kP, kI, kD, setpoint, iMax, usePONM):
         
-        #assigning gains to user inputs
+        #assigning gains to user imathuts
         self.kP = kP 
         self.kI = kI
         self.kD = kD
 
-        #the value that the PID controller wants the input to become
+        #the value that the PID controller wants the imathut to become
         self.setPoint = setpoint
 
         # you might not see this in your run-of-the-mill PID library, this is just a limit on how bit the integral can get
@@ -76,17 +77,6 @@ class PID:
         if abs(self.integral + self.error * self.kI * dt) < self.iMax:
             self.integral += self.error * self.kI * dt
 
-        # if abs(self.error > 5):
-        #     if change < 0:
-        #         self.derivitive = ((change / dt) + 30) * self.kD
-        #         if self.derivitive < 0:
-        #             self.derivitive = 0
-        #     if change > 0:
-        #         self.derivitive = ((change / dt) - 30) * self.kD
-        #         if self.derivitive > 0:
-        #             self.derivitive = 0
-        # else:
-    
         self.derivitive = change / dt * self.kD
 
         if self.usePONM == True:
@@ -200,12 +190,12 @@ class NAVController:
         self.oriKF.update(self.oriRates)
         self.oriRatesFiltered = self.oriKF.output()
         
-        ang = self.oriRatesFiltered.len()
+        ang = self.oriRatesFiltered.norm()
 
         self.orientation_quat *= Quaternion(0, 0, 0, 0).fromAxisAngle(ang*dt, self.oriRatesFiltered.x/ang, self.oriRatesFiltered.y/ang, self.oriRatesFiltered.z/ang)
 
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
-
+        
         self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocalFiltered)
 
         self.accelerationInertial += gravity

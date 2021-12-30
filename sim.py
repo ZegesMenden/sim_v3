@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d.axes3d as p3
 import matplotlib.animation as animation
 
+import math
 import numpy as np
+from numpy import random
 
-DEG_TO_RAD = np.pi / 180
-RAD_DEG = 180 / np.pi
+DEG_TO_RAD = math.pi / 180
+RAD_DEG = 180 / math.pi
 
 # stolen from stack overflow
 class bcolors:
@@ -24,7 +26,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-rocket = DOF6("rocket")
+rocket = DOF6()
 
 rocket.dataLogger = dataLogger()
 
@@ -58,10 +60,6 @@ rocket.dataLogger.addDataPoint("ori_x_roll_velocity_sensed_filtered")
 rocket.dataLogger.addDataPoint("ori_y_pitch_velocity_sensed_filtered")
 rocket.dataLogger.addDataPoint("ori_z_yaw_velocity_sensed_filtered")
 
-# rocket.dataLogger.addDataPoint("ori_x_acceleration")#############
-# rocket.dataLogger.addDataPoint("ori_y_acceleration")#############
-# rocket.dataLogger.addDataPoint("ori_z_acceleration")#############
-
 rocket.dataLogger.addDataPoint("x_position")
 rocket.dataLogger.addDataPoint("y_position")
 rocket.dataLogger.addDataPoint("z_position")
@@ -80,14 +78,15 @@ rocket.dataLogger.addDataPoint("z_velocity_sensed")
 
 rocket.dataLogger.addDataPoint("resultant_velocity")
 rocket.dataLogger.addDataPoint("resultant_velocity_sensed")
+rocket.dataLogger.addDataPoint("angle_of_attack")
 
 rocket.dataLogger.addDataPoint("prograde_direction_x_roll")
 rocket.dataLogger.addDataPoint("prograde_direction_y_pitch")
 rocket.dataLogger.addDataPoint("prograde_direction_z_yaw")
 
-rocket.dataLogger.addDataPoint("retrograde_direction_x_roll")
-rocket.dataLogger.addDataPoint("retrograde_direction_y_pitch")
-rocket.dataLogger.addDataPoint("retrograde_direction_z_yaw")
+rocket.dataLogger.addDataPoint("x_drag_force")
+rocket.dataLogger.addDataPoint("y_drag_force")
+rocket.dataLogger.addDataPoint("z_drag_force")
 
 rocket.dataLogger.addDataPoint("x_acceleration")
 rocket.dataLogger.addDataPoint("y_acceleration")
@@ -133,21 +132,24 @@ rocket.dataLogger.initCSV(True, True)
 
 apogee = False
 
-rocket.dryMass = 1.0
+rocket.dryMass = 0.81   
 motor = rocketMotor(1000)
 
-motor.add_motor(motorType.f15, "ascent")
-motor.add_motor(motorType.f15, "landing")
+motor.add_motor(motorType.e12, "ascent")
+# motor.add_motor(motorType.f15, "landing")
 
 rocket.mass = rocket.dryMass + motor.totalMotorMass
 
-rocket.mmoi = vector3(0.0102, 0.0404203354, 0.0404203354)
+rocket.mmoi = vector3(0.0102, 0.0548202733120976, 0.0548202733120976)
 rocket.rotation_euler = vector3(0 * DEG_TO_RAD, random.randint(-100, 100) / 200 * DEG_TO_RAD, random.randint(-100, 100) / 200 * DEG_TO_RAD)
 rocket.rotation_quaternion = Quaternion().eulerToQuaternion(rocket.rotation_euler.x, rocket.rotation_euler.y, rocket.rotation_euler.z)
 rocket.gravity = vector3(-9.83, 0.0, 0.0)
 
-def getAngleFromDesiredAcceleration(desired_acceleration, thrust):
-    return np.arcsin(desired_acceleration*rocket.mass/thrust)
+def getAngleFromDesiredAcceleration(desired_acceleration, mass, thrust):
+    if abs(desired_acceleration*(mass/thrust)) < 1.0:
+        return math.asin(desired_acceleration*(mass/thrust))
+    else:
+        return 0.0
 
 ori_setpoint = flightPath()
 ori_setpoint.loadFlightPath('flightPath.csv')
@@ -157,24 +159,29 @@ maxPosition = 0.0
 global setpoint
 setpoint = vector3(0.0, 0.0, 0.0)
 
-fsf_test_z = FSF(12.36, 7.58)
-fsf_test_y = FSF(12.36, 7.58)
+fsf_test_z = FSF(10.0, 6.53254619)
+fsf_test_y = FSF(10.0, 6.53254619)
 
 rocket_TVC = TVC()
 
-rocket_TVC.lever = 0.24
-rocket_TVC.linkageRatio.z = 10
-rocket_TVC.linkageRatio.y = 10
+rocket.cpLocation = vector3(0.4, 0.0, 0.0)
+rocket.dragArea = 0.6
+rocket.dragCoefficient = 0.4
+
+TVC_arm = vector3(0.41, 0.0, 0.0)
+
+rocket_TVC.linkageRatio.z = 4
+rocket_TVC.linkageRatio.y = 4
 
 rocket_TVC.noise.y = 0.05 * DEG_TO_RAD
 rocket_TVC.noise.z = 0.05 * DEG_TO_RAD
 
 rocket_TVC.servoSpeed = 200
 
-rocket_TVC.max.y = 3
-rocket_TVC.max.z = 3
-rocket_TVC.min.y = -3
-rocket_TVC.min.z = -3
+rocket_TVC.max.y = 5
+rocket_TVC.max.z = 5
+rocket_TVC.min.y = -5
+rocket_TVC.min.z = -5
 
 TVC_derolled = vector3( 0.0, 0.0, 0.0 )
 
@@ -219,11 +226,11 @@ IMU.sampleRateGyro = 1 / 500
 
 baro.noise = 0.005
 
-IMU.gyroBias = vector3(np.random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD, np.random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD)
-IMU.accelBias = vector3(np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0], np.random.normal(0.0, 0.6, 1)[0])
+IMU.gyroBias = vector3(random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD, random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD, random.normal(0.0, 0.5, 1)[0] * DEG_TO_RAD)
+IMU.accelBias = vector3(random.normal(0.0, 0.6, 1)[0], random.normal(0.0, 0.6, 1)[0],random.normal(0.0, 0.6, 1)[0])
 
 IMU.gyroNoise = vector3(0.5 * DEG_TO_RAD, 0.5 * DEG_TO_RAD, 0.5 * DEG_TO_RAD)
-IMU.accelNoise = abs(vector3(np.random.normal(0.2, 0.1, 1)[0], np.random.normal(0.2, 0.1, 1)[0], np.random.normal(0.2, 0.1, 1)[0]))
+IMU.accelNoise = abs(vector3(random.normal(0.2, 0.1, 1)[0], random.normal(0.2, 0.1, 1)[0], random.normal(0.2, 0.1, 1)[0]))
 
 IMU.gyroScale = vector3(1000 * DEG_TO_RAD, 1000 * DEG_TO_RAD, 1000 * DEG_TO_RAD)
 IMU.accelScale = vector3(40, 40, 40)
@@ -252,8 +259,8 @@ throttle = 0.0
 def readSensors(time, dt):
     
     localRotation = rocket.rotation_quaternion.conj().rotateVector(rocket.rotationalVelocity)
-    localAcceleration = rocket.rotation_quaternion.conj().rotateVector(rocket.accelerationInertial)
-    IMU.readAccel(localAcceleration, time)
+    
+    IMU.readAccel(rocket.accelerationLocal, time)
     IMU.readGyro(localRotation, time)
 
     if time < 0.9:
@@ -323,12 +330,17 @@ def logCSV():
     rocket.dataLogger.recordVariable("y_velocity_sensed", NAV.velocityInertial.y)
     rocket.dataLogger.recordVariable("z_velocity_sensed", NAV.velocityInertial.z)
 
-    rocket.dataLogger.recordVariable("resultant_velocity", rocket.velocityInertial.len())
-    rocket.dataLogger.recordVariable("resultant_velocity_sensed", NAV.velocityInertial.len())
+    rocket.dataLogger.recordVariable("resultant_velocity", rocket.velocityInertial.norm())
+    rocket.dataLogger.recordVariable("resultant_velocity_sensed", NAV.velocityInertial.norm())
+    rocket.dataLogger.recordVariable("angle_of_attack", rocket.aoa * RAD_TO_DEG)
     
     rocket.dataLogger.recordVariable("prograde_direction_x_roll", rocket.velocityInertial.dir().x * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("prograde_direction_y_pitch", rocket.velocityInertial.dir().y * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("prograde_direction_z_yaw", rocket.velocityInertial.dir().z * RAD_TO_DEG)
+
+    rocket.dataLogger.recordVariable("x_drag_force", rocket.dragForce.x)
+    rocket.dataLogger.recordVariable("y_drag_force", rocket.dragForce.y)
+    rocket.dataLogger.recordVariable("z_drag_force", rocket.dragForce.z)
 
     rocket.dataLogger.recordVariable("x_acceleration", rocket.accelerationLocal.x)
     rocket.dataLogger.recordVariable("y_acceleration", rocket.accelerationLocal.y)
@@ -380,8 +392,8 @@ def controlLoop():
         burnAlt = 0.66 * NAV.positionInertial.x
         apogee_sensed = NAV.positionInertial.x
 
-    if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt:
-        motor.ignite("landing", time)
+    # if apogee_sensed > 0 and NAV.positionInertial.x < burnAlt:
+    #     motor.ignite("landing", time)
 
     if apogee_sensed > 0 and NAV.accelerationLocal.x > 25 and retroPeak == 0.0:
         retroPeak = time
@@ -394,29 +406,30 @@ def controlLoop():
     # if missionTime > 1.5 and missionTime < 2:
     #     setpoint = vector3(0, 0, 0)
 
-    if missionTime < 4:
-        ori_setpoint.getCurrentSetpoint(missionTime)
-        setpoint = ori_setpoint.currentSetpoint * DEG_TO_RAD
-    elif apogee_sensed > 0 and NAV.positionInertial.x < burnAlt and time < retroPeak + 1.5:
-        pgrad = NAV.velocityInertial.dir()
-        if pgrad.z > 0:
-            pgrad.z -= 180 * DEG_TO_RAD
-        else:
-            pgrad.z += 180 * DEG_TO_RAD
-        if pgrad.y > 0:
-            pgrad.y -= 180 * DEG_TO_RAD
-        else:
-            pgrad.y += 180 * DEG_TO_RAD
+    # if missionTime < 4:
+    #     ori_setpoint.getCurrentSetpoint(missionTime)
+    #     setpoint = ori_setpoint.currentSetpoint * DEG_TO_RAD
+    # elif apogee_sensed > 0 and NAV.positionInertial.x < burnAlt and time < retroPeak + 1.5:
+    #     pgrad = NAV.velocityInertial.dir()
+    #     if pgrad.z > 0:
+    #         pgrad.z -= 180 * DEG_TO_RAD
+    #     else:
+    #         pgrad.z += 180 * DEG_TO_RAD
+    #     if pgrad.y > 0:
+    #         pgrad.y -= 180 * DEG_TO_RAD
+    #     else:
+    #         pgrad.y += 180 * DEG_TO_RAD
         
-        pgrad.y *= -1
-        pgrad.x = 0.0
-        pgrad *= 0.5
+    #     pgrad.y *= -1
+    #     pgrad.x = 0.0
+    #     pgrad *= 0.5
 
-        # setpoint = NAV.orientation_quat.rotateVector(pgrad)
-        setpoint = pgrad
-        setpoint.x = 0.0
-    else:
-        setpoint = vector3(0, 0, 0)
+    #     # setpoint = NAV.orientation_quat.rotateVector(pgrad)
+    #     setpoint = pgrad
+    #     setpoint.x = 0.0
+    # else:
+    #     setpoint = vector3(0, 0, 0)
+
 
     # if time > retroPeak + 1 and NAV.positionInertial.x < burnAlt:
     #     setpoint = vector3(0, 0, 0)
@@ -427,11 +440,11 @@ def controlLoop():
     fsf_test_y.compute(NAV.orientation_euler.y, NAV.oriRates.y)
     fsf_test_z.compute(NAV.orientation_euler.z, NAV.oriRates.z)
 
-    TVC_y = getAngleFromDesiredAcceleration(fsf_test_y.getOutput(), NAV.accelerationLocal.x)
-    TVC_z = getAngleFromDesiredAcceleration(fsf_test_z.getOutput(), NAV.accelerationLocal.x)
+    TVC_y = getAngleFromDesiredAcceleration(fsf_test_y.getOutput(), rocket.dryMass, NAV.accelerationLocal.x)
+    TVC_z = getAngleFromDesiredAcceleration(fsf_test_z.getOutput(), rocket.dryMass, NAV.accelerationLocal.x)
     
-    cr = np.cos(-NAV.orientation_euler.x)
-    sr = np.sin(-NAV.orientation_euler.x)
+    cr = math.cos(-NAV.orientation_euler.x)
+    sr = math.sin(-NAV.orientation_euler.x)
 
     tvcy = TVC_y * cr - TVC_z * sr
     tvcz = TVC_y * sr + TVC_z * cr
@@ -439,6 +452,7 @@ def controlLoop():
     return vector3(0.0, tvcy, tvcz)
 
 while time < simTime:
+
     time += dt
 
     if rocket.positionInertial.x > 0.01:
@@ -448,11 +462,14 @@ while time < simTime:
     rocket_TVC.calculateForces(motor.currentThrust)
 
     rocket.mass = rocket.dryMass + motor.totalMotorMass
+    
+    rocket.calaulateAerodynamics()
 
-    rocket.addLocalForce(rocket_TVC.acceleration)
-    rocket.addLocalTorque(rocket_TVC.torque)
-    rocket.addGlobalTorque(rocket.rotationalVelocity * -0.05)
-    rocket.addGlobalForce(vector3(rocket.velocityInertial.x * -0.025, rocket.velocityInertial.z * -0.025, rocket.velocityInertial.z * -0.025))
+    rocket.addLocalForce(rocket_TVC.force)
+    rocket.addTorqueLocal(rocket_TVC.force * 0.41)
+    rocket.applyForce(rocket.dragForce, rocket.cpLocation)
+
+    rocket.update(dt)
 
     if NAV.accelerationLocal.x > 2:
         rocket_TVC.actuate(TVC_command, dt)
@@ -472,7 +489,6 @@ while time < simTime:
         logCSV()
         lastCSV = time
 
-    rocket.update(dt)
     rocket.clear()
 
     if abs(rocket.positionInertial.x) > maxPosition:
@@ -559,7 +575,8 @@ if "Y" in inp.upper():
     'ori_x_roll', 'ori_y_pitch', 'ori_z_yaw', 
     'ori_x_roll_sensed', 'ori_y_pitch_sensed', 'ori_z_yaw_sensed', 
     'actuator_output_y_pitch', 'actuator_output_z_yaw',
-    'ori_x_roll_setpoint', 'ori_y_pitch_setpoint', 'ori_z_yaw_setpoint']
+    'ori_x_roll_setpoint', 'ori_y_pitch_setpoint', 'ori_z_yaw_setpoint',
+    'angle_of_attack']
     # 'prograde_direction_x_roll', 'prograde_direction_y_pitch', 'prograde_direction_z_yaw']
 
     oriRate_plot_points = ['time', 
@@ -576,6 +593,7 @@ if "Y" in inp.upper():
     'x_velocity_sensed', 'y_velocity_sensed', 'z_velocity_sensed']
 
     accel_plot_points=['time', 
+    'x_drag_force', 'y_drag_force', 'z_drag_force', 
     'x_acceleration', 'y_acceleration', 'z_acceleration', 
     'x_acceleration_sensed', 'y_acceleration_sensed', 'z_acceleration_sensed', 
     'x_acceleration_sensed_filtered', 'y_acceleration_sensed_filtered', 'z_acceleration_sensed_filtered']
@@ -682,7 +700,7 @@ if "Y" in inp.upper():
     t = np.array(plot_position[1]) # This would be the z-axis ('t' means time here)
     x = np.array(plot_position[2])
     y = np.array(plot_position[3])
-    # dataSet = np.array([plot_position[3], plot_position[2], plot_position[1]])
+    # dataSet = math.array([plot_position[3], plot_position[2], plot_position[1]])
     # numDataPoints = len(plot_position[0])
     dataSet = np.array([x, y, t])
 

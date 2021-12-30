@@ -57,3 +57,26 @@ v = q.conj().rotateVector(v)
 
 print(v)
 print(v.len())
+
+import random
+good_number = random.randint(1, 10)
+won = False
+
+def second():
+    if input == (good_number):
+        print('you won, play again?(y,n)')
+        if input == ('y'):
+            main()
+        if input == ('n'):
+            print('good game')
+            return True
+    elif input():
+        print('you got it wrong')
+        return False
+        
+def main():
+    while True:
+        print('guess the number, one through ten')
+        if second() == True:
+            break
+        
