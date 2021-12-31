@@ -1,4 +1,5 @@
 from physics import *
+
 from dataManagement import *
 from controlMath import *
 from motors import *
@@ -40,14 +41,6 @@ rocket.dataLogger.addDataPoint("ori_x_roll_sensed")
 rocket.dataLogger.addDataPoint("ori_y_pitch_sensed")
 rocket.dataLogger.addDataPoint("ori_z_yaw_sensed")
 
-rocket.dataLogger.addDataPoint("reaction_wheel_output_x_roll")
-rocket.dataLogger.addDataPoint("actuator_output_y_pitch")
-rocket.dataLogger.addDataPoint("actuator_output_z_yaw")
-
-rocket.dataLogger.addDataPoint("ori_x_roll_setpoint")
-rocket.dataLogger.addDataPoint("ori_y_pitch_setpoint")
-rocket.dataLogger.addDataPoint("ori_z_yaw_setpoint")
-
 rocket.dataLogger.addDataPoint("ori_x_roll_velocity")
 rocket.dataLogger.addDataPoint("ori_y_pitch_velocity")
 rocket.dataLogger.addDataPoint("ori_z_yaw_velocity")
@@ -60,6 +53,14 @@ rocket.dataLogger.addDataPoint("ori_x_roll_velocity_sensed_filtered")
 rocket.dataLogger.addDataPoint("ori_y_pitch_velocity_sensed_filtered")
 rocket.dataLogger.addDataPoint("ori_z_yaw_velocity_sensed_filtered")
 
+rocket.dataLogger.addDataPoint("reaction_wheel_output_x_roll")
+rocket.dataLogger.addDataPoint("actuator_output_y_pitch")
+rocket.dataLogger.addDataPoint("actuator_output_z_yaw")
+
+rocket.dataLogger.addDataPoint("ori_x_roll_setpoint")
+rocket.dataLogger.addDataPoint("ori_y_pitch_setpoint")
+rocket.dataLogger.addDataPoint("ori_z_yaw_setpoint")
+
 rocket.dataLogger.addDataPoint("x_position")
 rocket.dataLogger.addDataPoint("y_position")
 rocket.dataLogger.addDataPoint("z_position")
@@ -67,6 +68,10 @@ rocket.dataLogger.addDataPoint("z_position")
 rocket.dataLogger.addDataPoint("x_position_sensed")
 rocket.dataLogger.addDataPoint("y_position_sensed")
 rocket.dataLogger.addDataPoint("z_position_sensed")
+
+rocket.dataLogger.addDataPoint("x_gps_position_sensed")
+rocket.dataLogger.addDataPoint("y_gps_position_sensed")
+rocket.dataLogger.addDataPoint("z_gps_position_sensed")
 
 rocket.dataLogger.addDataPoint("x_velocity")
 rocket.dataLogger.addDataPoint("y_velocity")
@@ -76,13 +81,13 @@ rocket.dataLogger.addDataPoint("x_velocity_sensed")
 rocket.dataLogger.addDataPoint("y_velocity_sensed")
 rocket.dataLogger.addDataPoint("z_velocity_sensed")
 
+rocket.dataLogger.addDataPoint("x_gps_velocity_sensed")
+rocket.dataLogger.addDataPoint("y_gps_velocity_sensed")
+rocket.dataLogger.addDataPoint("z_gps_velocity_sensed")
+
 rocket.dataLogger.addDataPoint("resultant_velocity")
 rocket.dataLogger.addDataPoint("resultant_velocity_sensed")
 rocket.dataLogger.addDataPoint("angle_of_attack")
-
-rocket.dataLogger.addDataPoint("prograde_direction_x_roll")
-rocket.dataLogger.addDataPoint("prograde_direction_y_pitch")
-rocket.dataLogger.addDataPoint("prograde_direction_z_yaw")
 
 rocket.dataLogger.addDataPoint("x_drag_force")
 rocket.dataLogger.addDataPoint("y_drag_force")
@@ -135,8 +140,8 @@ apogee = False
 rocket.dryMass = 0.81   
 motor = rocketMotor(1000)
 
-motor.add_motor(motorType.e12, "ascent")
-# motor.add_motor(motorType.f15, "landing")
+motor.add_motor(motorType.f15, "ascent")
+motor.add_motor(motorType.f15, "landing")
 
 rocket.mass = rocket.dryMass + motor.totalMotorMass
 
@@ -210,6 +215,10 @@ CSVSpeed = 50
 CSVDelay = 1 / CSVSpeed
 lastCSV = 0.0
 
+gpsSpeed = 5
+gpsReadDelay = 1 / gpsSpeed
+lastGPS = 0.0
+
 dt = 1 / timeStep
 
 motor.ignite("ascent", 1.0)
@@ -218,6 +227,7 @@ motor.maxIgnitionDelay = 0.78
 
 NAV = NAVController()
 IMU = IMU6DOF()
+GPS = GPS()
 baro = barometer()
 
 baro.readDelay = 1 / 40
@@ -235,8 +245,18 @@ IMU.accelNoise = abs(vector3(random.normal(0.2, 0.1, 1)[0], random.normal(0.2, 0
 IMU.gyroScale = vector3(1000 * DEG_TO_RAD, 1000 * DEG_TO_RAD, 1000 * DEG_TO_RAD)
 IMU.accelScale = vector3(40, 40, 40)
 
-NAV.oriKF.set_gains(vector3(1,1,1), vector3(2,2,2))
-NAV.accelKF.set_gains(vector3(4, 4, 4), vector3(8, 8, 8))
+NAV.posKF_x = kalmanPosition()
+NAV.posKF_y = kalmanPosition()
+NAV.posKF_z = kalmanPosition()
+
+NAV.posKF_x.Q = 2.5
+NAV.posKF_x.R = 1.5
+
+NAV.posKF_y.Q = 2.5
+NAV.posKF_y.R = 1.5
+
+NAV.posKF_z.Q = 2.5
+NAV.posKF_z.R = 1.5
 
 TVC_command = vector3(0.0, 0.0, 0.0)
 
@@ -265,6 +285,7 @@ def readSensors(time, dt):
 
     if time < 0.9:
         NAV.measureDebias(IMU.accel, IMU.oriRates)
+        # NAV.accelOri(NAV.accelerationLocal)
     else:
         NAV.debias()
         # NAV.accelOri(NAV.accelerationLocal)
@@ -273,15 +294,23 @@ def readSensors(time, dt):
     #     NAV.oriKF.set_initial_value(vector3(0, 0, 0))
     #     NAV.accelKF.set_initial_value(vector3(0, 0, 0))
     if NAV.debiased:
-        NAV.update(IMU.accel, IMU.oriRates, rocket.gravity, dt, time)
+        NAV.update(IMU.accel, IMU.oriRates, rocket.gravity, dt)
 
     if time > baro.lastRead + baro.readDelay:
         baro.read(rocket.positionInertial.x, time)
         NAV.passBarometerData(baro.altitude, baro.velocity, time)
+        # NAV.posKF_x.update_position(baro.altitude)
+    
+    if time > GPS.lastRead + gpsReadDelay:
+        GPS.update(rocket.positionInertial, rocket.velocityInertial, gpsReadDelay, time)
+        NAV.posKF_x.update_position(GPS.measuredPosition.x)
+        NAV.posKF_y.update_position(GPS.measuredPosition.y)
+        NAV.posKF_z.update_position(GPS.measuredPosition.z)
 
 def logCSV():
     global setpoint
     rocket.dataLogger.recordVariable("time", time)
+
     rocket.dataLogger.recordVariable("ori_x_roll", rocket.rotation_euler.x * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_y_pitch", rocket.rotation_euler.y * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_z_yaw", rocket.rotation_euler.z * RAD_TO_DEG)
@@ -289,10 +318,6 @@ def logCSV():
     rocket.dataLogger.recordVariable("ori_x_roll_sensed", NAV.orientation_euler.x * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_y_pitch_sensed", NAV.orientation_euler.y * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_z_yaw_sensed", NAV.orientation_euler.z * RAD_TO_DEG)
-
-    rocket.dataLogger.recordVariable("reaction_wheel_output_x_roll", 0.0)
-    rocket.dataLogger.recordVariable("actuator_output_y_pitch", rocket_TVC.position.y * RAD_TO_DEG)
-    rocket.dataLogger.recordVariable("actuator_output_z_yaw", rocket_TVC.position.z * RAD_TO_DEG)
 
     rocket.dataLogger.recordVariable("ori_x_roll_setpoint", setpoint.x * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_y_pitch_setpoint", setpoint.y * RAD_TO_DEG)
@@ -305,14 +330,10 @@ def logCSV():
     rocket.dataLogger.recordVariable("ori_x_roll_velocity_sensed", NAV.oriRates.x * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_y_pitch_velocity_sensed", NAV.oriRates.y * RAD_TO_DEG)
     rocket.dataLogger.recordVariable("ori_z_yaw_velocity_sensed", NAV.oriRates.z * RAD_TO_DEG)
-    
-    rocket.dataLogger.recordVariable("ori_x_roll_velocity_sensed_filtered", NAV.oriRatesFiltered.x * RAD_TO_DEG)
-    rocket.dataLogger.recordVariable("ori_y_pitch_velocity_sensed_filtered", NAV.oriRatesFiltered.y * RAD_TO_DEG)
-    rocket.dataLogger.recordVariable("ori_z_yaw_velocity_sensed_filtered", NAV.oriRatesFiltered.z * RAD_TO_DEG)
 
-    # rocket.dataLogger.recordVariable("ori_x_acceleration", rocket.rotationalAcceleration.x)####", rocket.)
-    # rocket.dataLogger.recordVariable("ori_y_acceleration", rocket.rotationalAcceleration.y)####", rocket.)
-    # rocket.dataLogger.recordVariable("ori_z_acceleration", rocket.rotationalAcceleration.z)####", rocket.)
+    rocket.dataLogger.recordVariable("reaction_wheel_output_x_roll", 0.0)
+    rocket.dataLogger.recordVariable("actuator_output_y_pitch", rocket_TVC.position.y * RAD_TO_DEG)
+    rocket.dataLogger.recordVariable("actuator_output_z_yaw", rocket_TVC.position.z * RAD_TO_DEG)
 
     rocket.dataLogger.recordVariable("x_position", rocket.positionInertial.x)
     rocket.dataLogger.recordVariable("y_position", rocket.positionInertial.y)
@@ -322,6 +343,10 @@ def logCSV():
     rocket.dataLogger.recordVariable("y_position_sensed", NAV.positionInertial.y)
     rocket.dataLogger.recordVariable("z_position_sensed", NAV.positionInertial.z)
 
+    rocket.dataLogger.recordVariable("x_gps_position_sensed", GPS.measuredPosition.x)
+    rocket.dataLogger.recordVariable("y_gps_position_sensed", GPS.measuredPosition.y)
+    rocket.dataLogger.recordVariable("z_gps_position_sensed", GPS.measuredPosition.z)
+
     rocket.dataLogger.recordVariable("x_velocity", rocket.velocityInertial.x)
     rocket.dataLogger.recordVariable("y_velocity", rocket.velocityInertial.y)
     rocket.dataLogger.recordVariable("z_velocity", rocket.velocityInertial.z)
@@ -330,14 +355,14 @@ def logCSV():
     rocket.dataLogger.recordVariable("y_velocity_sensed", NAV.velocityInertial.y)
     rocket.dataLogger.recordVariable("z_velocity_sensed", NAV.velocityInertial.z)
 
+    rocket.dataLogger.recordVariable("x_gps_velocity_sensed", GPS.measuredVelocity.x)
+    rocket.dataLogger.recordVariable("y_gps_velocity_sensed", GPS.measuredVelocity.y)
+    rocket.dataLogger.recordVariable("z_gps_velocity_sensed", GPS.measuredVelocity.z)
+
     rocket.dataLogger.recordVariable("resultant_velocity", rocket.velocityInertial.norm())
     rocket.dataLogger.recordVariable("resultant_velocity_sensed", NAV.velocityInertial.norm())
     rocket.dataLogger.recordVariable("angle_of_attack", rocket.aoa * RAD_TO_DEG)
     
-    rocket.dataLogger.recordVariable("prograde_direction_x_roll", rocket.velocityInertial.dir().x * RAD_TO_DEG)
-    rocket.dataLogger.recordVariable("prograde_direction_y_pitch", rocket.velocityInertial.dir().y * RAD_TO_DEG)
-    rocket.dataLogger.recordVariable("prograde_direction_z_yaw", rocket.velocityInertial.dir().z * RAD_TO_DEG)
-
     rocket.dataLogger.recordVariable("x_drag_force", rocket.dragForce.x)
     rocket.dataLogger.recordVariable("y_drag_force", rocket.dragForce.y)
     rocket.dataLogger.recordVariable("z_drag_force", rocket.dragForce.z)
@@ -349,10 +374,6 @@ def logCSV():
     rocket.dataLogger.recordVariable("x_acceleration_sensed", NAV.accelerationLocal.x)
     rocket.dataLogger.recordVariable("y_acceleration_sensed", NAV.accelerationLocal.y)
     rocket.dataLogger.recordVariable("z_acceleration_sensed", NAV.accelerationLocal.z)
-
-    rocket.dataLogger.recordVariable("x_acceleration_sensed_filtered", NAV.accelerationLocalFiltered.x)
-    rocket.dataLogger.recordVariable("y_acceleration_sensed_filtered", NAV.accelerationLocalFiltered.y)
-    rocket.dataLogger.recordVariable("z_acceleration_sensed_filtered", NAV.accelerationLocalFiltered.z)
 
     rocket.dataLogger.recordVariable("x_acceleration_inertial", rocket.accelerationInertial.x)
     rocket.dataLogger.recordVariable("y_acceleration_inertial", rocket.accelerationInertial.y)
@@ -385,7 +406,7 @@ def controlLoop():
     global setpoint
     global retroPeak
 
-    # setpoint = vector3(0.0, 0.0, 0.0)
+    setpoint = vector3(0.0, 0.0, 0.0)
 
     if NAV.velocityInertial.x < 0 and apogee_sensed == 0.0:
         rocket.dryMass -= 0.025
@@ -401,10 +422,10 @@ def controlLoop():
     # setpoint = vector3(0, 0, 0)
     # print(round(rocket.velocityInertial.dir() * RAD_TO_DEG, 2))
 
-    # if missionTime > 1 and missionTime < 1.5:
-    #     setpoint = vector3(0, 5 * DEG_TO_RAD, 0)
-    # if missionTime > 1.5 and missionTime < 2:
-    #     setpoint = vector3(0, 0, 0)
+    if missionTime > 1 and missionTime < 1.5:
+        setpoint = vector3(0, 8 * DEG_TO_RAD, 0)
+    if missionTime > 1.5 and missionTime < 2:
+        setpoint = vector3(0, 0, 0)
 
     # if missionTime < 4:
     #     ori_setpoint.getCurrentSetpoint(missionTime)
@@ -463,11 +484,11 @@ while time < simTime:
 
     rocket.mass = rocket.dryMass + motor.totalMotorMass
     
-    rocket.calaulateAerodynamics()
+    # rocket.calaulateAerodynamics()
 
     rocket.addLocalForce(rocket_TVC.force)
     rocket.addTorqueLocal(rocket_TVC.force * 0.41)
-    rocket.applyForce(rocket.dragForce, rocket.cpLocation)
+    # rocket.applyForce(rocket.dragForce, rocket.cpLocation)
 
     rocket.update(dt)
 

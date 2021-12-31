@@ -1,4 +1,5 @@
 import math
+from typing import AsyncContextManager
 import numpy as np
 import random
 from physics import *
@@ -100,12 +101,12 @@ class FSF:
     def getOutput(self):
         return self.output
 
-class kalman:
+class kalman1dof:
 
     # just a python implementation of atlas aerospace's arduino kalman filter:
     # https://github.com/atlas-aerospace-yt/Arduino-Kalman-Filter
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self.a = vector3(1, 1, 1)
         self.b = vector3(1, 1, 1)
@@ -118,7 +119,7 @@ class kalman:
         self.x_hat = vector3()
         self.p = vector3()
 
-    def update(self, sensor_reading):
+    def update(self, sensor_reading) -> None:
 
         x_hat_minus_1 = self.a * self.x_hat + self.b * self.u
 
@@ -131,17 +132,69 @@ class kalman:
 
         self.x_hat = x_hat_minus_1
 
-    def output(self):
+    def output(self) -> float:
         return self.x_hat
 
-    def set_gains(self, q, r):
+    def set_gains(self, q, r) -> None:
 
         self.q = q
         self.r = r
 
+class kalmanPosition:
+
+    def __init__(self) -> None:
+
+        self.P = [0.0, 0.0, 0.0, 0.0]
+        self.vel = 0.0
+        self.pos = 0.0
+
+        self.Q = 0.0
+        self.R = 0.0
+
+    def update_accel(self, accel, dt) -> None:
+
+        self.vel += accel * dt
+        self.pos += self.vel * dt
+        q_dtdt = self.Q * (dt * dt)
+        self.P[0] += ( self.P[2] + self.P[1] + ( self.P[3] + q_dtdt * 0.25 ) * dt ) * dt
+        self.P[1] += ( self.P[3] + q_dtdt * 0.5 ) * dt
+        self.P[2] = self.P[1]
+        self.P[3] += q_dtdt
+
+    def update_position(self, pos) -> None:
+
+        y = self.pos - pos
+
+        inv = 1.0 / ( self.P[0] + self.R )
+
+        K_a = self.P[0] * inv
+        K_b = self.P[2] * inv
+
+        self.pos += K_a * y
+        self.vel += K_b * y
+
+        self.vel += y
+        self.vel /= 2.0
+
+        self.pos += pos
+        self.pos /= 2.0
+
+        self.P[0] -= K_a * self.P[0]
+        self.P[1] -= K_a * self.P[1]
+        self.P[2] -= K_b * self.P[0]
+        self.P[3] -= K_b * self.P[1]
+
+    def get_position(self) -> float:
+
+        return self.pos
+
+    def get_velocity(self) -> float:
+
+        return self.vel
+
 class NAVController:
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self.accelBias = vector3(0.0, 0.0, 0.0)
 
@@ -152,14 +205,12 @@ class NAVController:
         self.barometerTime = 0.0
 
         self.oriRates = vector3(0.0, 0.0, 0.0)
-        self.oriRatesFiltered = vector3(0.0, 0.0, 0.0)
         self.lastOriRates = vector3(0.0, 0.0, 0.0)
 
         self.orientation_quat = Quaternion()
         self.orientation_euler = vector3(0.0, 0.0, 0.0)
 
         self.accelerationLocal = vector3(0.0, 0.0, 0.0)
-        self.accelerationLocalFiltered = vector3(0.0, 0.0, 0.0)
         self.lastAccelerationLocal = vector3(0.0, 0.0, 0.0)
 
         self.accelerationInertial = vector3(0.0, 0.0, 0.0)
@@ -172,10 +223,11 @@ class NAVController:
         self.debiased = False
         self.inFlight = False
 
-        self.oriKF = kalman()
-        self.accelKF = kalman()
+        self.posKF_x = kalmanPosition()
+        self.posKF_y = kalmanPosition()
+        self.posKF_z = kalmanPosition()
 
-    def update(self, acceleration, rotationalVel, gravity, dt, time):
+    def update(self, acceleration, rotationalVel, gravity, dt) -> None:
 
         self.accelerationLocal = acceleration - self.accelBias
         self.oriRates = rotationalVel - self.gyroscopeBias
@@ -183,28 +235,28 @@ class NAVController:
         if self.inFlight == False:
             self.positionInertial = vector3(0, 0 ,0)
             self.velocityInertial = vector3(0, 0, 0)
-
-        self.accelKF.update(self.accelerationLocal)
-        self.accelerationLocalFiltered = self.accelKF.output()
-
-        self.oriKF.update(self.oriRates)
-        self.oriRatesFiltered = self.oriKF.output()
         
-        ang = self.oriRatesFiltered.norm()
+        ang = self.oriRates.norm()
 
-        self.orientation_quat *= Quaternion(0, 0, 0, 0).fromAxisAngle(ang*dt, self.oriRatesFiltered.x/ang, self.oriRatesFiltered.y/ang, self.oriRatesFiltered.z/ang)
+        self.orientation_quat *= Quaternion(0, 0, 0, 0).fromAxisAngle(ang*dt, self.oriRates.x/ang, self.oriRates.y/ang, self.oriRates.z/ang)
 
         self.orientation_euler = self.orientation_quat.quaternionToEuler()
         
-        self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocalFiltered)
+        self.accelerationInertial = self.orientation_quat.rotateVector(self.accelerationLocal)
 
         self.accelerationInertial += gravity
 
-        self.velocityInertial += self.accelerationInertial * dt
-        self.positionInertial += self.velocityInertial * dt
+        self.posKF_x.update_accel(self.accelerationInertial.x, dt)
+        self.posKF_y.update_accel(self.accelerationInertial.y, dt)
+        self.posKF_z.update_accel(self.accelerationInertial.z, dt)
 
-        self.velocityInertial.x = LPF(self.velocityInertial.x, self.barometerVel, 0.1 * (((time - self.barometerTime) / 40) + 1))
-        self.positionInertial.x = LPF(self.positionInertial.x, self.barometerAlt, 0.1 * (((time - self.barometerTime) / 40) + 1))
+        self.velocityInertial.x = self.posKF_x.vel
+        self.velocityInertial.y = self.posKF_y.vel
+        self.velocityInertial.z = self.posKF_z.vel
+
+        self.positionInertial.x = self.posKF_x.pos
+        self.positionInertial.y = self.posKF_y.pos
+        self.positionInertial.z = self.posKF_z.pos
 
         if self.accelerationLocal.x > 10:
             self.inFlight = True
@@ -216,23 +268,30 @@ class NAVController:
         #     self.accelerationLocalFiltered = self.accelerationLocal
         #     self.oriRatesFiltered = self.oriRates
     
-    def accelOri(self, accel):
+    def accelOri(self, accel) -> None:
         q = Quaternion().fromVector(self.orientation_quat.rotateVector(accel)) * Quaternion(0, 1, 0, 0)
         q.w = 1 - q.w
         self.orientation_quat = Quaternion().fromVector(self.orientation_quat.conj().rotateVector(q.fractional(0.5)))
 
-    def passBarometerData(self, barometerAlt, barometerVel, time):
+    def passBarometerData(self, barometerAlt, barometerVel, time) -> None:
         self.barometerAlt = barometerAlt
         self.barometerVel = barometerVel
         self.barometerTime = time
+
+    def passGPSData(self, gpsData) -> None:
+        
+        if isinstance(gpsData, vector3):
+            self.posKF_x.update_position(gpsData.x)
+            self.posKF_y.update_position(gpsData.y)
+            self.posKF_z.update_position(gpsData.z)
     
-    def measureDebias(self, acceleration, rotationalVel):
+    def measureDebias(self, acceleration, rotationalVel) -> None:
         if self.inFlight == False and self.debiased == False:
             self.debiasCount += 1
             self.accelBias += acceleration
             self.gyroscopeBias += rotationalVel
 
-    def debias(self):
+    def debias(self) -> None:
         if self.debiased == False and self.debiasCount > 0:
             self.accelBias /= self.debiasCount
             self.gyroscopeBias /= self.debiasCount
@@ -240,7 +299,7 @@ class NAVController:
 
 class barometer:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.altitude = 0.0
         self.noise = 0.0
         self.lastRead = 0.0
@@ -251,7 +310,7 @@ class barometer:
         self.pressureEventOffset = 0.0
         self.timeSincePressureEvent = 0.0
     
-    def read(self, altitude, time):
+    def read(self, altitude, time) -> None:
         if time > self.lastRead + self.readDelay:
             if self.pressureEventOffset > 0:
                 self.pressureEventOffset -= self.pressureEventOffset * 0.5 * (time - self.lastRead)
@@ -261,13 +320,13 @@ class barometer:
             self.lastAltitude = self.altitude
             self.lastVelocity = self.velocity
     
-    def pressureEvent(self, effect, time):
+    def pressureEvent(self, effect, time) -> None:
         self.pressureEventOffset = effect
         self.timeSincePressureEvent = time
 
 class IMU6DOF:
 
-    def __init__(self):
+    def __init__(self) -> None:
         
         self.accel = vector3(0.0, 0.0, 0.0)
         self.oriRates = vector3(0.0, 0.0, 0.0)
@@ -287,7 +346,7 @@ class IMU6DOF:
         self.lastReadAccel = 0.0
         self.lastReadGyro = 0.0
 
-    def readAccel(self, trueAccelerations, time):
+    def readAccel(self, trueAccelerations, time) -> None:
 
         if time > self.lastReadAccel + self.sampleRateAccel:
             
@@ -312,7 +371,7 @@ class IMU6DOF:
             if self.accel.z < -self.accelScale.z:
                 self.accel.z = -self.accelScale.z
 
-    def readGyro(self, trueOriRates, time):
+    def readGyro(self, trueOriRates, time) -> None:
 
         if time > self.lastReadGyro + self.sampleRateGyro:
 
@@ -338,3 +397,28 @@ class IMU6DOF:
                 self.oriRates.z = self.gyroScale.z
             if self.oriRates.z < -self.gyroScale.z:
                 self.oriRates.z = -self.gyroScale.z
+
+class GPS:
+
+    def __init__(self) -> None:
+        
+        self.measuredPosition = vector3()
+        self.measuredVelocity = vector3()
+        self.signs = vector3(random.choice([-1, 1]), random.choice([-1, 1]), random.choice([-1, 1]))
+        self.lastRead = 0.0
+        self.accuracy = 0.0
+
+    def update(self, position, velocity, dt, time) -> None:
+        
+        self.accuracy += random.randint(0, 100) / 1000.0 * random.choice([-1, 1])
+
+        if self.accuracy < 0.1:
+            self.accuracy = 0.1
+
+        if self.accuracy > 0.75:
+            self.accuracy = 0.75
+
+        self.measuredPosition = position + (vector3(self.accuracy, self.accuracy, self.accuracy) * self.signs)
+        self.measuredVelocity = velocity + (vector3(self.accuracy, self.accuracy, self.accuracy) * self.signs * dt)
+
+        self.lastRead = time
