@@ -277,6 +277,7 @@ class NAVController:
         self.barometerAlt = barometerAlt
         self.barometerVel = barometerVel
         self.barometerTime = time
+        self.posKF_x.update_position(barometerAlt)
 
     def passGPSData(self, gpsData) -> None:
         

@@ -137,7 +137,7 @@ rocket.dataLogger.initCSV(True, True)
 
 apogee = False
 
-rocket.dryMass = 0.81   
+rocket.dryMass = 0.81
 motor = rocketMotor(1000)
 
 motor.add_motor(motorType.f15, "ascent")
@@ -198,7 +198,7 @@ rocket_TVC.offset.z = random.randint(-100, 100) / 5000 * DEG_TO_RAD
 
 time = 0.0
 missionTime = 0.0
-timeStep = 5000
+timeStep = 1000
 simTime = 90
 
 totalSteps = simTime * timeStep
@@ -249,9 +249,8 @@ NAV.posKF_x = kalmanPosition()
 NAV.posKF_y = kalmanPosition()
 NAV.posKF_z = kalmanPosition()
 
-NAV.posKF_x.Q = 2.5
-NAV.posKF_x.R = 1.5
-
+NAV.posKF_x.Q = 0.5
+NAV.posKF_x.R = 0.25
 NAV.posKF_y.Q = 2.5
 NAV.posKF_y.R = 1.5
 
@@ -277,9 +276,9 @@ vel_burn_start = 0.0
 throttle = 0.0
 
 def readSensors(time, dt):
-    
+
     localRotation = rocket.rotation_quaternion.conj().rotateVector(rocket.rotationalVelocity)
-    
+
     IMU.readAccel(rocket.accelerationLocal, time)
     IMU.readGyro(localRotation, time)
 
@@ -289,7 +288,7 @@ def readSensors(time, dt):
     else:
         NAV.debias()
         # NAV.accelOri(NAV.accelerationLocal)
-    
+
     # if NAV.inFlight == False:
     #     NAV.oriKF.set_initial_value(vector3(0, 0, 0))
     #     NAV.accelKF.set_initial_value(vector3(0, 0, 0))
@@ -299,8 +298,8 @@ def readSensors(time, dt):
     if time > baro.lastRead + baro.readDelay:
         baro.read(rocket.positionInertial.x, time)
         NAV.passBarometerData(baro.altitude, baro.velocity, time)
-        # NAV.posKF_x.update_position(baro.altitude)
-    
+        NAV.posKF_x.update_position(baro.altitude)
+
     if time > GPS.lastRead + gpsReadDelay:
         GPS.update(rocket.positionInertial, rocket.velocityInertial, gpsReadDelay, time)
         NAV.posKF_x.update_position(GPS.measuredPosition.x)
@@ -362,7 +361,7 @@ def logCSV():
     rocket.dataLogger.recordVariable("resultant_velocity", rocket.velocityInertial.norm())
     rocket.dataLogger.recordVariable("resultant_velocity_sensed", NAV.velocityInertial.norm())
     rocket.dataLogger.recordVariable("angle_of_attack", rocket.aoa * RAD_TO_DEG)
-    
+
     rocket.dataLogger.recordVariable("x_drag_force", rocket.dragForce.x)
     rocket.dataLogger.recordVariable("y_drag_force", rocket.dragForce.y)
     rocket.dataLogger.recordVariable("z_drag_force", rocket.dragForce.z)
@@ -385,7 +384,7 @@ def logCSV():
 
     rocket.dataLogger.recordVariable("altitude_barometric", baro.altitude)
     rocket.dataLogger.recordVariable("velocity_barometric", baro.velocity)
-    
+
     rocket.dataLogger.recordVariable("resultant_acceleration", rocket.accelerationInertial.z)
     rocket.dataLogger.recordVariable("resultant_acceleration_sensed", rocket.accelerationInertial.z)
 
@@ -422,14 +421,12 @@ def controlLoop():
     # setpoint = vector3(0, 0, 0)
     # print(round(rocket.velocityInertial.dir() * RAD_TO_DEG, 2))
 
-    if missionTime > 1 and missionTime < 1.5:
-        setpoint = vector3(0, 8 * DEG_TO_RAD, 0)
-    if missionTime > 1.5 and missionTime < 2:
-        setpoint = vector3(0, 0, 0)
+    # if missionTime > 1 and missionTime < 5:
+    #     setpoint = vector3(0, 5 * DEG_TO_RAD, 0)
 
-    # if missionTime < 4:
-    #     ori_setpoint.getCurrentSetpoint(missionTime)
-    #     setpoint = ori_setpoint.currentSetpoint * DEG_TO_RAD
+    if missionTime < 4:
+        ori_setpoint.getCurrentSetpoint(missionTime)
+        setpoint = ori_setpoint.currentSetpoint * DEG_TO_RAD
     # elif apogee_sensed > 0 and NAV.positionInertial.x < burnAlt and time < retroPeak + 1.5:
     #     pgrad = NAV.velocityInertial.dir()
     #     if pgrad.z > 0:
@@ -440,7 +437,7 @@ def controlLoop():
     #         pgrad.y -= 180 * DEG_TO_RAD
     #     else:
     #         pgrad.y += 180 * DEG_TO_RAD
-        
+
     #     pgrad.y *= -1
     #     pgrad.x = 0.0
     #     pgrad *= 0.5
@@ -463,13 +460,13 @@ def controlLoop():
 
     TVC_y = getAngleFromDesiredAcceleration(fsf_test_y.getOutput(), rocket.dryMass, NAV.accelerationLocal.x)
     TVC_z = getAngleFromDesiredAcceleration(fsf_test_z.getOutput(), rocket.dryMass, NAV.accelerationLocal.x)
-    
+
     cr = math.cos(-NAV.orientation_euler.x)
     sr = math.sin(-NAV.orientation_euler.x)
 
     tvcy = TVC_y * cr - TVC_z * sr
     tvcz = TVC_y * sr + TVC_z * cr
-    
+
     return vector3(0.0, tvcy, tvcz)
 
 while time < simTime:
@@ -483,12 +480,12 @@ while time < simTime:
     rocket_TVC.calculateForces(motor.currentThrust)
 
     rocket.mass = rocket.dryMass + motor.totalMotorMass
-    
-    # rocket.calaulateAerodynamics()
+
+    rocket.calaulateAerodynamics()
 
     rocket.addLocalForce(rocket_TVC.force)
     rocket.addTorqueLocal(rocket_TVC.force * 0.41)
-    # rocket.applyForce(rocket.dragForce, rocket.cpLocation)
+    rocket.applyForce(rocket.dragForce, rocket.cpLocation)
 
     rocket.update(dt)
 
@@ -545,8 +542,8 @@ print(f'''
 {bcolors.OKBLUE}x sensed: {bcolors.FAIL}{round(rocket.velocityInertial.x, 2)} m/s {bcolors.OKBLUE} x actual: {bcolors.FAIL}{round(rocket.velocityInertial.x, 2)} m/s
 
 {bcolors.WARNING}lateral velocities at impact:
-{bcolors.OKBLUE}y sensed: {bcolors.FAIL}{round(NAV.velocityInertial.y, 2)} m/s{bcolors.OKBLUE} - y actual: {bcolors.FAIL}{round(rocket.velocityInertial.y, 2)} m/s 
-{bcolors.OKBLUE}z sensed: {bcolors.FAIL}{round(NAV.velocityInertial.z, 2)} m/s{bcolors.OKBLUE} - z actual: {bcolors.FAIL}{round(rocket.velocityInertial.z, 2)} m/s 
+{bcolors.OKBLUE}y sensed: {bcolors.FAIL}{round(NAV.velocityInertial.y, 2)} m/s{bcolors.OKBLUE} - y actual: {bcolors.FAIL}{round(rocket.velocityInertial.y, 2)} m/s
+{bcolors.OKBLUE}z sensed: {bcolors.FAIL}{round(NAV.velocityInertial.z, 2)} m/s{bcolors.OKBLUE} - z actual: {bcolors.FAIL}{round(rocket.velocityInertial.z, 2)} m/s
 
 {bcolors.WARNING}orientation at impact:
 
@@ -591,32 +588,33 @@ if abs(rocket.positionInertial.z) < 8 and abs(rocket.positionInertial.y) < 8:
 inp = input(f'{bcolors.OKBLUE}show graphs?{bcolors.WARNING}\n')
 
 if "Y" in inp.upper():
-    
-    ori_plot_points = ['time', 
-    'ori_x_roll', 'ori_y_pitch', 'ori_z_yaw', 
-    'ori_x_roll_sensed', 'ori_y_pitch_sensed', 'ori_z_yaw_sensed', 
+
+    ori_plot_points = ['time',
+    'ori_x_roll', 'ori_y_pitch', 'ori_z_yaw',
+    'ori_x_roll_sensed', 'ori_y_pitch_sensed', 'ori_z_yaw_sensed',
     'actuator_output_y_pitch', 'actuator_output_z_yaw',
     'ori_x_roll_setpoint', 'ori_y_pitch_setpoint', 'ori_z_yaw_setpoint',
     'angle_of_attack']
     # 'prograde_direction_x_roll', 'prograde_direction_y_pitch', 'prograde_direction_z_yaw']
 
-    oriRate_plot_points = ['time', 
-    'ori_x_roll_velocity', 'ori_y_pitch_velocity', 'ori_z_yaw_velocity', 
-    'ori_x_roll_velocity_sensed', 'ori_y_pitch_velocity_sensed', 'ori_z_yaw_velocity_sensed', 
+    oriRate_plot_points = ['time',
+    'ori_x_roll_velocity', 'ori_y_pitch_velocity', 'ori_z_yaw_velocity',
+    'ori_x_roll_velocity_sensed', 'ori_y_pitch_velocity_sensed', 'ori_z_yaw_velocity_sensed',
     'ori_x_roll_velocity_sensed_filtered', 'ori_y_pitch_velocity_sensed_filtered', 'ori_z_yaw_velocity_sensed_filtered']
 
-    pos_plot_points = ['time', 
-    'x_position', 'y_position', 'z_position', 
+    pos_plot_points = ['time',
+    'x_position', 'y_position', 'z_position',
     'x_position_sensed', 'y_position_sensed', 'z_position_sensed']
 
-    vel_plot_points = ['time', 
-    'x_velocity', 'y_velocity', 'z_velocity', 
-    'x_velocity_sensed', 'y_velocity_sensed', 'z_velocity_sensed']
+    vel_plot_points = ['time',
+    'x_velocity', 'y_velocity', 'z_velocity',
+    'x_velocity_sensed', 'y_velocity_sensed', 'z_velocity_sensed',
+    'x_gps_velocity_sensed', 'y_gps_velocity_sensed', 'z_gps_velocity_sensed']
 
-    accel_plot_points=['time', 
-    'x_drag_force', 'y_drag_force', 'z_drag_force', 
-    'x_acceleration', 'y_acceleration', 'z_acceleration', 
-    'x_acceleration_sensed', 'y_acceleration_sensed', 'z_acceleration_sensed', 
+    accel_plot_points=['time',
+    'x_drag_force', 'y_drag_force', 'z_drag_force',
+    'x_acceleration', 'y_acceleration', 'z_acceleration',
+    'x_acceleration_sensed', 'y_acceleration_sensed', 'z_acceleration_sensed',
     'x_acceleration_sensed_filtered', 'y_acceleration_sensed_filtered', 'z_acceleration_sensed_filtered']
 
     plot_ori = plotter.graph_from_csv(ori_plot_points)
@@ -625,11 +623,11 @@ if "Y" in inp.upper():
     plot_velocity = plotter.graph_from_csv(vel_plot_points)
     plot_accel = plotter.graph_from_csv(accel_plot_points)
     plot_all = plotter.graph_from_csv(data_list)
-    
+
     # 3d position graph
 
     plt.figure(1)
-    
+
     ax = plt.axes(projection='3d')
     ax.set_xlim3d(-maxPosition, maxPosition)
     ax.set_ylim3d(-maxPosition, maxPosition)
@@ -676,7 +674,7 @@ if "Y" in inp.upper():
     plt.xlabel("time")
     plt.ylabel("various readings m/s2")
 
-    
+
     plt.figure(6)
 
     for index, dataPoint in enumerate(plot_oriRates):
@@ -693,14 +691,14 @@ if "Y" in inp.upper():
     ax.set_xlim3d(-maxPosition, maxPosition)
     ax.set_ylim3d(-maxPosition, maxPosition)
     ax.set_zlim3d(0, maxPosition)
-    
+
     # numDataPoints = len(plot_position)
-    
+
     # def func(num, dataset, line):
     #     line.set_data([dataset[2], dataset[1]])
     #     line.set_3d_properties(dataset[0])
     #     return line
-    
+
 
     # line = plt.plot(plot_position[3], plot_position[2], plot_position[1], lw=2, c='g')[0]
 
@@ -713,8 +711,8 @@ if "Y" in inp.upper():
         for index, x in enumerate(dataSet[2]):
             if x >= xcur-0.1 and x <= xcur -0.1:
                 numpog = index
-        line.set_data(dataSet[0:2, num-20:num])    
-        line.set_3d_properties(dataSet[2, num-20:num])    
+        line.set_data(dataSet[0:2, num-20:num])
+        line.set_3d_properties(dataSet[2, num-20:num])
         return line
 
     # # THE DATA POINTS
@@ -729,14 +727,14 @@ if "Y" in inp.upper():
     print(numDataPoints)
     # NOTE: Can't pass empty arrays into 3d version of plot()
     line = plt.plot(dataSet[0], dataSet[1], dataSet[2], lw=2, c='g')[0] # For line plot
-    
+
     # AXES PROPERTIES]
     # ax.set_xlim3d([limit0, limit1])
     ax.set_xlabel('y')
     ax.set_ylabel('z')
     ax.set_zlabel('x')
     ax.set_title('Trajectory of electron for E vector along [120]')
-    
+
     # Creating the Animation object
     line_ani = animation.FuncAnimation(fig, func, frames=numDataPoints, fargs=(dataSet,line), interval=(time/numDataPoints), blit=False)
     # line_ani.save(r'AnimationNew.mp4')

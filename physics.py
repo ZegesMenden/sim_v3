@@ -461,8 +461,7 @@ class DOF6:
 
         self.dragForce = vector3()
 
-        # stops rocket from rotating on the pad (below 0.01m AGL)
-        self.padClamp = True
+        self.floor = True
 
         # not aero things
 
@@ -510,7 +509,7 @@ class DOF6:
 
         if isinstance(torque, vector3):
 
-            self.rotationalAcceleration += vector3(0.0, torque.y / self.mmoi.y, torque.z / self.mmoi.z)
+            self.rotationalAcceleration += vector3(torque.x / self.mmoi.x, torque.y / self.mmoi.y, torque.z / self.mmoi.z)
 
         else:
             raise TypeError
@@ -570,8 +569,6 @@ class DOF6:
                 self.dragForce = vector3()
 
     def update(self, dt) -> None:
-
-        self.rotationalVelocity += self.rotationalAcceleration * dt
         
         ang = self.rotationalVelocity.norm()
 
@@ -582,14 +579,16 @@ class DOF6:
 
         self.rotation_euler = self.rotation_quaternion.quaternionToEuler()
 
+        self.rotationalVelocity += self.rotationalAcceleration * dt
+
         self.accelerationLocal = self.rotation_quaternion.conj().rotateVector(self.accelerationInertial)
 
         self.accelerationInertial += self.gravity
 
-        self.velocityInertial += self.accelerationInertial * dt
         self.positionInertial += self.velocityInertial * dt
+        self.velocityInertial += self.accelerationInertial * dt
 
-        if self.positionInertial.x <= 0:
+        if self.positionInertial.x <= 0 and self.floor == True:
             self.velocityInertial = vector3(0.0, 0.0, 0.0)
             self.rotationalVelocity = vector3(0.0, 0.0, 0.0)
             self.positionInertial = vector3(0.0, self.positionInertial.y, self.positionInertial.z)
@@ -604,3 +603,5 @@ class DOF6:
 # x  = 0.81 * 9.8 * (1.279 ** 2) * (0.3 ** 2)
 # x /= 4 * (math.pi * math.pi) * 0.54
 # print(x)
+# pog = Quaternion().eulerToQuaternion(45.0 * DEG_TO_RAD, 45.0 * DEG_TO_RAD, 0.0 * DEG_TO_RAD)
+# print(vector3(1.0, 0.0, 0.0).angleBetweenVectors( pog.rotateVector(vector3(1.0, 0.0, 0.0)) ) * RAD_TO_DEG)
